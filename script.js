@@ -5,14 +5,20 @@ const health1 = document.getElementById("health1");
 const health2 = document.getElementById("health2");
 const health3 = document.getElementById("health3");
 
-const GROUND_Y = 380;
+const GROUND_Y = 440;
 const GRAVITY = 0.9;
 const FRICTION = 0.85;
 const PLAYER_WIDTH = 48;
 const PLAYER_HEIGHT = 68;
 const ATTACK_DURATION = 180;
-const ATTACK_RANGE = 70;
+const ATTACK_RANGE = 50;
 const ATTACK_DAMAGE = 14;
+
+const COVERS = [
+  { x: 240, y: GROUND_Y - 64, width: 120, height: 64 },
+  { x: 520, y: GROUND_Y - 64, width: 120, height: 64 },
+  { x: 820, y: GROUND_Y - 64, width: 120, height: 64 },
+];
 
 const keys = new Set();
 let gameStarted = false;
@@ -68,7 +74,7 @@ const players = [
 
 function resetGame() {
   players.forEach((player, index) => {
-    player.x = 90 + index * 300;
+    player.x = 120 + index * 400;
     player.y = GROUND_Y - PLAYER_HEIGHT;
     player.vx = 0;
     player.vy = 0;
@@ -106,6 +112,26 @@ function drawBackground() {
   }
 }
 
+function drawCoversBottom() {
+  COVERS.forEach((cover) => {
+    const topHalf = cover.height * 0.5;
+    ctx.fillStyle = "#30435f";
+    ctx.fillRect(cover.x, cover.y + topHalf, cover.width, cover.height - topHalf);
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.strokeRect(cover.x, cover.y + topHalf, cover.width, cover.height - topHalf);
+  });
+}
+
+function drawCoversTop() {
+  COVERS.forEach((cover) => {
+    const topHalf = cover.height * 0.5;
+    ctx.fillStyle = "#30435f";
+    ctx.fillRect(cover.x, cover.y, cover.width, topHalf);
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.strokeRect(cover.x, cover.y, cover.width, topHalf);
+  });
+}
+
 function drawPlayer(player) {
   const shadowY = player.y + PLAYER_HEIGHT + 6;
   ctx.fillStyle = "rgba(0,0,0,0.12)";
@@ -137,6 +163,33 @@ function getAttackHitbox(player) {
 
 function rectsOverlap(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function resolveCoverCollision(player) {
+  COVERS.forEach((cover) => {
+    const playerBox = { x: player.x, y: player.y, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+    const coverBox = { x: cover.x, y: cover.y, width: cover.width, height: cover.height };
+    if (!rectsOverlap(playerBox, coverBox)) return;
+
+    const overlapX = Math.min(player.x + PLAYER_WIDTH, cover.x + cover.width) - Math.max(player.x, cover.x);
+    const overlapY = Math.min(player.y + PLAYER_HEIGHT, cover.y + cover.height) - Math.max(player.y, cover.y);
+    if (overlapX < overlapY) {
+      if (player.x + PLAYER_WIDTH / 2 < cover.x + cover.width / 2) {
+        player.x = cover.x - PLAYER_WIDTH;
+      } else {
+        player.x = cover.x + cover.width;
+      }
+      player.vx = 0;
+    } else {
+      if (player.y + PLAYER_HEIGHT / 2 < cover.y + cover.height / 2) {
+        player.y = cover.y - PLAYER_HEIGHT;
+        player.vy = 0;
+      } else {
+        player.y = cover.y + cover.height;
+        player.vy = 0;
+      }
+    }
+  });
 }
 
 function updatePlayers() {
@@ -178,6 +231,8 @@ function updatePlayers() {
       player.onGround = true;
     }
 
+    resolveCoverCollision(player);
+
     if (player.attackTimer > 0) {
       player.attackTimer -= 16;
       if (player.attackTimer <= 0) {
@@ -188,6 +243,19 @@ function updatePlayers() {
   });
 }
 
+function isAttackBlockedByCover(attacker, target) {
+  const hitbox = getAttackHitbox(attacker);
+  const targetCenter = target.x + PLAYER_WIDTH / 2;
+  return COVERS.some((cover) => {
+    if (!rectsOverlap(hitbox, cover)) return false;
+    const coverCenter = cover.x + cover.width / 2;
+    if (attacker.facing === 1) {
+      return coverCenter >= attacker.x + PLAYER_WIDTH && coverCenter <= targetCenter;
+    }
+    return coverCenter <= attacker.x && coverCenter >= targetCenter;
+  });
+}
+
 function processAttacks() {
   players.forEach((attacker) => {
     if (attacker.attackTimer > 0) {
@@ -195,7 +263,7 @@ function processAttacks() {
       players.forEach((target) => {
         if (target.id === attacker.id || attacker.attackHit.has(target.id) || target.health <= 0) return;
         const targetBox = { x: target.x, y: target.y, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
-        if (rectsOverlap(hitbox, targetBox)) {
+        if (rectsOverlap(hitbox, targetBox) && !isAttackBlockedByCover(attacker, target)) {
           target.health = Math.max(0, target.health - ATTACK_DAMAGE);
           attacker.attackHit.add(target.id);
           updateHealthUI();
@@ -239,9 +307,11 @@ function drawHealthBars() {
 function draw() {
   drawBackground();
   drawHealthBars();
+  drawCoversBottom();
   players.forEach((player) => {
     drawPlayer(player);
   });
+  drawCoversTop();
 }
 
 function gameLoop() {
