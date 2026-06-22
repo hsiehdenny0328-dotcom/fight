@@ -344,11 +344,13 @@ function attackPlayer(player) {
 }
 
 window.addEventListener("keydown", (event) => {
-  keys.add(event.key);
-  if (!gameStarted) {
+  const key = event.key.toLowerCase();
+  if (!gameStarted && key === "r") {
     resetGame();
+    return;
   }
 
+  keys.add(event.key);
   players.forEach((player) => {
     if (event.key === player.controls.attack) {
       attackPlayer(player);
