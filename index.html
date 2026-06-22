@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>三人決鬥</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <h1>三人決鬥</h1>
+    <canvas id="gameCanvas" width="900" height="450"></canvas>
+    <div class="status">
+      <div id="message">按任一鍵開始遊戲</div>
+      <div class="health-bars">
+        <div><span class="player-label player1">玩家 1</span> <span id="health1">100</span> / 100</div>
+        <div><span class="player-label player2">玩家 2</span> <span id="health2">100</span> / 100</div>
+        <div><span class="player-label player3">玩家 3</span> <span id="health3">100</span> / 100</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div>
+        <strong>玩家 1</strong><br />移動: A / D，跳躍: W，攻擊: S
+      </div>
+      <div>
+        <strong>玩家 2</strong><br />移動: ← / →，跳躍: ↑，攻擊: ↓
+      </div>
+      <div>
+        <strong>玩家 3</strong><br />移動: 4 / 6，跳躍: 8，攻擊: 5
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
