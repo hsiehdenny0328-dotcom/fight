@@ -15,9 +15,9 @@ const ATTACK_RANGE = 50;
 const ATTACK_DAMAGE = 14;
 
 const COVERS = [
-  { x: 240, y: GROUND_Y - 64, width: 120, height: 64 },
-  { x: 520, y: GROUND_Y - 64, width: 120, height: 64 },
-  { x: 820, y: GROUND_Y - 64, width: 120, height: 64 },
+  { x: 260, y: GROUND_Y - 80, width: 120, height: 80 },
+  { x: 520, y: GROUND_Y - 80, width: 120, height: 80 },
+  { x: 780, y: GROUND_Y - 80, width: 120, height: 80 },
 ];
 
 const keys = new Set();
@@ -72,13 +72,32 @@ const players = [
   },
 ];
 
+function getRandomSpawnX(existingSpawns) {
+  const margin = 40;
+  const maxX = canvas.width - PLAYER_WIDTH - margin;
+  let x;
+  let tries = 0;
+  do {
+    x = margin + Math.random() * (maxX - margin);
+    const playerBox = { x, y: GROUND_Y - PLAYER_HEIGHT, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+    const overlapsCover = COVERS.some((cover) => rectsOverlap(playerBox, cover));
+    const tooClose = existingSpawns.some((spawnX) => Math.abs(spawnX - x) < 140);
+    tries += 1;
+    if (tries > 50) break;
+  } while (overlapsCover || tooClose);
+  return x;
+}
+
 function resetGame() {
-  players.forEach((player, index) => {
-    player.x = 120 + index * 400;
+  const spawnXs = [];
+  players.forEach((player) => {
+    const x = getRandomSpawnX(spawnXs);
+    spawnXs.push(x);
+    player.x = x;
     player.y = GROUND_Y - PLAYER_HEIGHT;
     player.vx = 0;
     player.vy = 0;
-    player.facing = index === 2 ? -1 : 1;
+    player.facing = Math.random() < 0.5 ? -1 : 1;
     player.health = 100;
     player.onGround = true;
     player.attackTimer = 0;
@@ -112,23 +131,21 @@ function drawBackground() {
   }
 }
 
-function drawCoversBottom() {
+function drawCoversBase() {
   COVERS.forEach((cover) => {
-    const topHalf = cover.height * 0.5;
     ctx.fillStyle = "#30435f";
-    ctx.fillRect(cover.x, cover.y + topHalf, cover.width, cover.height - topHalf);
+    ctx.fillRect(cover.x, cover.y + 16, cover.width, cover.height - 16);
     ctx.strokeStyle = "rgba(255,255,255,0.1)";
-    ctx.strokeRect(cover.x, cover.y + topHalf, cover.width, cover.height - topHalf);
+    ctx.strokeRect(cover.x, cover.y + 16, cover.width, cover.height - 16);
   });
 }
 
-function drawCoversTop() {
+function drawCoversFront() {
   COVERS.forEach((cover) => {
-    const topHalf = cover.height * 0.5;
-    ctx.fillStyle = "#30435f";
-    ctx.fillRect(cover.x, cover.y, cover.width, topHalf);
-    ctx.strokeStyle = "rgba(255,255,255,0.1)";
-    ctx.strokeRect(cover.x, cover.y, cover.width, topHalf);
+    ctx.fillStyle = "#2a3b51";
+    ctx.fillRect(cover.x, cover.y, cover.width, 16);
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.strokeRect(cover.x, cover.y, cover.width, 16);
   });
 }
 
@@ -183,18 +200,26 @@ function resolveCoverCollision(player) {
     } else {
       if (player.y + PLAYER_HEIGHT / 2 < cover.y + cover.height / 2) {
         player.y = cover.y - PLAYER_HEIGHT;
-        player.vy = 0;
       } else {
         player.y = cover.y + cover.height;
-        player.vy = 0;
       }
+      player.vy = 0;
     }
+  });
+}
+
+function isAttackBlockedByCover(attacker, target) {
+  const hitbox = getAttackHitbox(attacker);
+  const targetBox = { x: target.x, y: target.y, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+  return COVERS.some((cover) => {
+    const coverBox = { x: cover.x, y: cover.y, width: cover.width, height: cover.height };
+    return rectsOverlap(hitbox, coverBox) && rectsOverlap(coverBox, targetBox);
   });
 }
 
 function updatePlayers() {
   players.forEach((player) => {
-    const { left, right, jump, attack } = player.controls;
+    const { left, right, jump } = player.controls;
     const moveLeft = keys.has(left);
     const moveRight = keys.has(right);
     const jumpPressed = keys.has(jump);
@@ -240,19 +265,6 @@ function updatePlayers() {
         player.attackHit.clear();
       }
     }
-  });
-}
-
-function isAttackBlockedByCover(attacker, target) {
-  const hitbox = getAttackHitbox(attacker);
-  const targetCenter = target.x + PLAYER_WIDTH / 2;
-  return COVERS.some((cover) => {
-    if (!rectsOverlap(hitbox, cover)) return false;
-    const coverCenter = cover.x + cover.width / 2;
-    if (attacker.facing === 1) {
-      return coverCenter >= attacker.x + PLAYER_WIDTH && coverCenter <= targetCenter;
-    }
-    return coverCenter <= attacker.x && coverCenter >= targetCenter;
   });
 }
 
@@ -307,11 +319,11 @@ function drawHealthBars() {
 function draw() {
   drawBackground();
   drawHealthBars();
-  drawCoversBottom();
+  drawCoversBase();
   players.forEach((player) => {
     drawPlayer(player);
   });
-  drawCoversTop();
+  drawCoversFront();
 }
 
 function gameLoop() {
