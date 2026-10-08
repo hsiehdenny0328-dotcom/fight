@@ -26,6 +26,7 @@ const HOOK_PULL_SPEED = 11;
 const DECOY_LIFETIME = 2800;
 const SCREEN_SHAKE_DURATION = 180;
 const SCREEN_SHAKE_INTENSITY = 9;
+const SCREEN_SHAKE_VIBRATION_MULTIPLIER = 1.5;
 const effects = [];
 
 const keys = new Set();
@@ -418,6 +419,11 @@ function updateEffects() {
   screenShakeTimer = Math.max(0, screenShakeTimer - 16);
 }
 
+function triggerHitVibration() {
+  if (!navigator.vibrate) return;
+  navigator.vibrate(Math.max(20, 35 * SCREEN_SHAKE_VIBRATION_MULTIPLIER));
+}
+
 function applyHitReaction(target, attacker) {
   const targetCenterX = target.x + PLAYER_WIDTH / 2;
   const attackerCenterX = attacker.x + PLAYER_WIDTH / 2;
@@ -426,6 +432,7 @@ function applyHitReaction(target, attacker) {
   target.vy = Math.min(target.vy, -5);
   target.onGround = false;
   screenShakeTimer = SCREEN_SHAKE_DURATION;
+  triggerHitVibration();
 }
 
 function getAttackHitbox(player) {
@@ -710,7 +717,7 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
   if (screenShakeTimer > 0) {
-    const intensity = SCREEN_SHAKE_INTENSITY * (screenShakeTimer / SCREEN_SHAKE_DURATION);
+    const intensity = SCREEN_SHAKE_INTENSITY * SCREEN_SHAKE_VIBRATION_MULTIPLIER * (screenShakeTimer / SCREEN_SHAKE_DURATION);
     ctx.translate((Math.random() * 2 - 1) * intensity, (Math.random() * 2 - 1) * intensity);
   }
   drawBackground();
