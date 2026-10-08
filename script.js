@@ -24,6 +24,8 @@ const HOOK_SPEED = 14;
 const HOOK_RANGE = 560;
 const HOOK_PULL_SPEED = 11;
 const DECOY_LIFETIME = 2800;
+const SCREEN_SHAKE_DURATION = 180;
+const SCREEN_SHAKE_INTENSITY = 9;
 const effects = [];
 
 const keys = new Set();
@@ -33,6 +35,7 @@ const decoys = [];
 let gameStarted = false;
 let gameOver = false;
 let nextDecoyId = 0;
+let screenShakeTimer = 0;
 
 const players = [
   {
@@ -112,6 +115,7 @@ function resetGame() {
   hooks.length = 0;
   decoys.length = 0;
   effects.length = 0;
+  screenShakeTimer = 0;
   gameStarted = true;
   gameOver = false;
   message.textContent = "雙人決鬥開始！擊倒對手獲勝。";
@@ -136,17 +140,16 @@ function updateHealthUI() {
 }
 
 function drawBackground() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#0a1120";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(-SCREEN_SHAKE_INTENSITY, -SCREEN_SHAKE_INTENSITY, canvas.width + SCREEN_SHAKE_INTENSITY * 2, canvas.height + SCREEN_SHAKE_INTENSITY * 2);
   ctx.fillStyle = "#19233c";
-  ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+  ctx.fillRect(-SCREEN_SHAKE_INTENSITY, GROUND_Y, canvas.width + SCREEN_SHAKE_INTENSITY * 2, canvas.height - GROUND_Y + SCREEN_SHAKE_INTENSITY);
   ctx.strokeStyle = "rgba(255,255,255,0.08)";
   ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 40) {
+  for (let x = -40; x < canvas.width + 40; x += 40) {
     ctx.beginPath();
     ctx.moveTo(x, GROUND_Y);
-    ctx.lineTo(x, canvas.height);
+    ctx.lineTo(x, canvas.height + SCREEN_SHAKE_INTENSITY);
     ctx.stroke();
   }
 }
@@ -412,6 +415,17 @@ function updateEffects() {
   players.forEach((player) => {
     player.hitFlash = Math.max(0, player.hitFlash - 16);
   });
+  screenShakeTimer = Math.max(0, screenShakeTimer - 16);
+}
+
+function applyHitReaction(target, attacker) {
+  const targetCenterX = target.x + PLAYER_WIDTH / 2;
+  const attackerCenterX = attacker.x + PLAYER_WIDTH / 2;
+  const direction = Math.sign(targetCenterX - attackerCenterX) || attacker.facing;
+  target.vx = direction * 8;
+  target.vy = Math.min(target.vy, -5);
+  target.onGround = false;
+  screenShakeTimer = SCREEN_SHAKE_DURATION;
 }
 
 function getAttackHitbox(player) {
@@ -500,6 +514,11 @@ function updateProjectiles() {
     if (target) {
       target.health = Math.max(0, target.health - projectile.damage);
       target.hitFlash = 120;
+      const attacker = players.find((player) => player.id === projectile.ownerId);
+      if (!attacker) {
+        throw new Error(`Projectile owner ${projectile.ownerId} was not found`);
+      }
+      applyHitReaction(target, attacker);
       spawnImpact(projectile.x, projectile.y, "#54efff", 10);
       projectiles.splice(index, 1);
       updateHealthUI();
@@ -593,6 +612,7 @@ function updateHooks() {
     if (hitTarget) {
       hook.targetId = hitTarget.id;
       hitTarget.hitFlash = 180;
+      applyHitReaction(hitTarget, owner);
       spawnImpact(hook.x, hook.y, "#ff4558", 14);
     } else if (hook.distance >= HOOK_RANGE || hook.life <= 0) {
       hooks.splice(index, 1);
@@ -640,6 +660,7 @@ function processAttacks() {
         if (rectsOverlap(hitbox, targetBox)) {
           target.health = Math.max(0, target.health - BASIC_ATTACK.damage);
           target.hitFlash = 180;
+          applyHitReaction(target, attacker);
           spawnImpact(
             target.x + PLAYER_WIDTH / 2,
             target.y + PLAYER_HEIGHT / 2,
@@ -686,6 +707,12 @@ function drawHealthBars() {
 }
 
 function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  if (screenShakeTimer > 0) {
+    const intensity = SCREEN_SHAKE_INTENSITY * (screenShakeTimer / SCREEN_SHAKE_DURATION);
+    ctx.translate((Math.random() * 2 - 1) * intensity, (Math.random() * 2 - 1) * intensity);
+  }
   drawBackground();
   drawHealthBars();
   drawProjectiles();
@@ -695,6 +722,7 @@ function draw() {
     drawPlayer(player);
   });
   drawEffects();
+  ctx.restore();
 }
 
 function gameLoop() {
