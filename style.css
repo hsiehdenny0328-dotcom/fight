@@ -64,7 +64,15 @@ canvas {
 
 .health-bars {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.special-status {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   text-align: center;
   color: var(--text-muted);
@@ -82,13 +90,9 @@ canvas {
   color: #5ab4f5;
 }
 
-.player3 {
-  color: #80e07d;
-}
-
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -105,6 +109,7 @@ canvas {
 
 @media (max-width: 720px) {
   .health-bars,
+  .special-status,
   .controls {
     grid-template-columns: 1fr;
   }
