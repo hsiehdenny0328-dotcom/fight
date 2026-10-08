@@ -12,6 +12,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   min-height: 100vh;
   background: radial-gradient(circle at top, #2a3b5a 0%, #10131a 55%, #07090f 100%);
@@ -36,6 +40,99 @@ h1 {
   text-align: center;
   margin-bottom: 16px;
   letter-spacing: 0.08em;
+}
+
+.online-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.online-actions,
+.online-actions form,
+.room-info,
+.room-share {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.online-actions form {
+  color: var(--text-muted);
+}
+
+.online-help {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.online-panel button,
+.online-panel input {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.online-panel button {
+  color: var(--text);
+  background: #253957;
+  cursor: pointer;
+}
+
+.online-panel button:hover {
+  background: #314a70;
+}
+
+.online-panel button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.online-panel input {
+  width: 150px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.room-info {
+  min-height: 24px;
+  color: var(--text-muted);
+}
+
+#roomStatus {
+  text-align: center;
+}
+
+.room-share {
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+#roomCodeDisplay {
+  width: 128px;
+  padding: 4px 12px;
+  border: 1px solid rgba(90, 180, 245, 0.35);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.24);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-align: center;
+  cursor: text;
+  user-select: all;
 }
 
 canvas {
