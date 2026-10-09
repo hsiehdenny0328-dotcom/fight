@@ -5,6 +5,7 @@
   const actions = ['left', 'right', 'jump', 'attack', 'skill', 'extra', 'ultimate'];
   const STATE_UPDATE_INTERVAL = 1000 / 20;
   const MAX_BUFFERED_STATE_BYTES = 128 * 1024;
+  const MAX_SYNCED_EFFECTS = 32;
   let mode = 'local', peer = null, connection = null, generation = 0;
   let connected = false, lastSeen = 0, lastSend = 0, timeout;
   const held = new Set();
@@ -89,7 +90,9 @@
       projectiles:projectiles.slice(-100),
       hooks:hooks.slice(-20),
       decoys:decoys.slice(-20),
-      effects:effects.slice(-180),
+      effects:effects
+        .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
+        .slice(-MAX_SYNCED_EFFECTS),
       gameStarted,
       gameOver,
       screenShakeTimer,
