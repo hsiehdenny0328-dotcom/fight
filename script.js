@@ -141,18 +141,137 @@ function updateHealthUI() {
 }
 
 function drawBackground() {
-  ctx.fillStyle = "#0a1120";
-  ctx.fillRect(-SCREEN_SHAKE_INTENSITY, -SCREEN_SHAKE_INTENSITY, canvas.width + SCREEN_SHAKE_INTENSITY * 2, canvas.height + SCREEN_SHAKE_INTENSITY * 2);
-  ctx.fillStyle = "#19233c";
-  ctx.fillRect(-SCREEN_SHAKE_INTENSITY, GROUND_Y, canvas.width + SCREEN_SHAKE_INTENSITY * 2, canvas.height - GROUND_Y + SCREEN_SHAKE_INTENSITY);
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
-  ctx.lineWidth = 1;
+  const skyGradient = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  skyGradient.addColorStop(0, "#5a402c");
+  skyGradient.addColorStop(0.38, "#9d7b4c");
+  skyGradient.addColorStop(0.7, "#c79b5d");
+  skyGradient.addColorStop(1, "#d0a96a");
+  ctx.fillStyle = skyGradient;
+  ctx.fillRect(0, 0, canvas.width, GROUND_Y);
+
+  ctx.fillStyle = "rgba(82, 60, 35, 0.48)";
+  ctx.beginPath();
+  ctx.moveTo(-20, GROUND_Y - 10);
+  ctx.quadraticCurveTo(180, GROUND_Y - 120, 420, GROUND_Y - 20);
+  ctx.quadraticCurveTo(660, GROUND_Y - 150, 980, GROUND_Y - 5);
+  ctx.quadraticCurveTo(1080, GROUND_Y - 110, canvas.width + 30, GROUND_Y - 12);
+  ctx.lineTo(canvas.width + 30, canvas.height);
+  ctx.lineTo(-20, canvas.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(62, 45, 26, 0.58)";
+  ctx.beginPath();
+  ctx.moveTo(-20, GROUND_Y + 10);
+  ctx.quadraticCurveTo(190, GROUND_Y - 70, 510, GROUND_Y + 24);
+  ctx.quadraticCurveTo(720, GROUND_Y - 110, canvas.width + 20, GROUND_Y + 28);
+  ctx.lineTo(canvas.width + 20, canvas.height);
+  ctx.lineTo(-20, canvas.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(35, 24, 15, 0.76)";
+  ctx.beginPath();
+  ctx.moveTo(700, GROUND_Y + 40);
+  ctx.quadraticCurveTo(800, GROUND_Y - 90, 900, GROUND_Y + 18);
+  ctx.quadraticCurveTo(960, GROUND_Y + 70, 1080, GROUND_Y + 30);
+  ctx.lineTo(1080, canvas.height);
+  ctx.lineTo(700, canvas.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#6d4f30";
+  ctx.strokeStyle = "#3d2c1f";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(800, 160);
+  ctx.lineTo(760, GROUND_Y - 8);
+  ctx.lineTo(815, GROUND_Y - 8);
+  ctx.lineTo(830, 145);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(780, 175);
+  ctx.lineTo(750, 230);
+  ctx.lineTo(797, 235);
+  ctx.lineTo(790, 178);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(792, 180);
+  ctx.bezierCurveTo(846, 152, 954, 154, 1013, 172);
+  ctx.bezierCurveTo(974, 188, 932, 188, 900, 205);
+  ctx.bezierCurveTo(860, 218, 820, 206, 792, 180);
+  ctx.fillStyle = "rgba(64, 42, 24, 0.72)";
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(56, 38, 24, 0.85)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(810, 170);
+  ctx.lineTo(894, 208);
+  ctx.moveTo(842, 169);
+  ctx.lineTo(930, 214);
+  ctx.moveTo(872, 167);
+  ctx.lineTo(960, 206);
+  ctx.stroke();
+
+  ctx.fillStyle = "#d9b06a";
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y + 12);
+  ctx.lineTo(130, GROUND_Y - 18);
+  ctx.lineTo(246, GROUND_Y + 16);
+  ctx.lineTo(362, GROUND_Y - 42);
+  ctx.lineTo(468, GROUND_Y + 22);
+  ctx.lineTo(620, GROUND_Y - 24);
+  ctx.lineTo(760, GROUND_Y + 20);
+  ctx.lineTo(905, GROUND_Y - 30);
+  ctx.lineTo(1048, GROUND_Y + 18);
+  ctx.lineTo(canvas.width, GROUND_Y + 26);
+  ctx.lineTo(canvas.width, canvas.height);
+  ctx.lineTo(0, canvas.height);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(86, 61, 37, 0.6)";
+  for (let i = 0; i < 26; i += 1) {
+    const x = (i * 83 + (i % 3) * 20) % (canvas.width + 90);
+    const y = GROUND_Y + 12 + ((i * 41) % 120);
+    const w = 55 + (i % 4) * 14;
+    const h = 18 + (i % 3) * 9;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w * 0.45, y - h * 0.4);
+    ctx.lineTo(x + w, y + h * 0.3);
+    ctx.lineTo(x + w * 0.7, y + h);
+    ctx.lineTo(x + w * 0.15, y + h * 0.9);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = "rgba(105, 77, 43, 0.42)";
+  ctx.lineWidth = 2;
+  for (let y = GROUND_Y + 8; y < canvas.height; y += 22) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y + (y % 44 === 0 ? 8 : -4));
+    ctx.stroke();
+  }
+
   for (let x = -40; x < canvas.width + 40; x += 40) {
     ctx.beginPath();
     ctx.moveTo(x, GROUND_Y);
-    ctx.lineTo(x, canvas.height + SCREEN_SHAKE_INTENSITY);
+    ctx.lineTo(x + 10, canvas.height + SCREEN_SHAKE_INTENSITY);
+    ctx.strokeStyle = "rgba(120, 93, 54, 0.18)";
     ctx.stroke();
   }
+
+  ctx.fillStyle = "rgba(73, 51, 29, 0.45)";
+  ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
 }
 
 function drawPlayer(player) {
@@ -272,14 +391,41 @@ function drawPlayer(player) {
     const direction = player.facing;
     const slashX = centerX + direction * 27;
     const slashY = player.y + 36;
+    const softGlow = 0.4 + 0.6 * Math.sin(progress * Math.PI);
+    for (let index = 6; index >= 1; index -= 1) {
+      const trailProgress = index / 7;
+      const trailX = slashX - direction * index * 8;
+      const trailY = slashY + Math.sin(progress * Math.PI + index) * 8;
+      const trailAlpha = (0.08 + (1 - trailProgress) * 0.26) * softGlow;
+      ctx.save();
+      ctx.globalAlpha = trailAlpha;
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 36 + index * 5;
+      ctx.strokeStyle = isRed ? "#ffc0c8" : "#d6ffff";
+      ctx.lineWidth = 8 + index * 1.6;
+      ctx.beginPath();
+      ctx.arc(trailX, trailY, 34 + index * 4, direction === 1 ? -1.4 : Math.PI + 0.4, direction === 1 ? 1.4 : Math.PI - 0.4, direction === -1);
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.save();
-    ctx.globalAlpha = Math.sin(progress * Math.PI) * 0.9;
+    ctx.globalAlpha = softGlow * 0.96;
     ctx.shadowColor = glow;
-    ctx.shadowBlur = 20;
-    ctx.strokeStyle = isRed ? "#ff4858" : "#6bffff";
-    ctx.lineWidth = 7;
+    ctx.shadowBlur = 42;
+    ctx.strokeStyle = isRed ? "#ff6d7c" : "#86ffff";
+    ctx.lineWidth = 10;
     ctx.beginPath();
-    ctx.arc(slashX, slashY, 32, direction === 1 ? -1.1 : Math.PI + 0.1, direction === 1 ? 1.1 : Math.PI - 0.1, direction === -1);
+    ctx.arc(slashX, slashY, 36, direction === 1 ? -1.5 : Math.PI + 0.5, direction === 1 ? 1.5 : Math.PI - 0.5, direction === -1);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = softGlow * 0.7;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = isRed ? "#ffe3e6" : "#ffffff";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(slashX, slashY, 22, direction === 1 ? -1.1 : Math.PI + 0.1, direction === 1 ? 1.1 : Math.PI - 0.1, direction === -1);
     ctx.stroke();
     ctx.restore();
   }
@@ -303,14 +449,30 @@ function drawPlayer(player) {
 
 function drawProjectiles() {
   projectiles.forEach((projectile) => {
-    ctx.fillStyle = "rgba(90,180,245,0.3)";
+    const flameColor = projectile.ownerId === 2 ? "#ff9e42" : "#8bd4ff";
+    for (let index = 4; index >= 1; index -= 1) {
+      const trailRadius = PROJECTILE_RADIUS + index * 2.4;
+      const trailAlpha = 0.12 + index * 0.07;
+      ctx.save();
+      ctx.globalAlpha = trailAlpha;
+      ctx.fillStyle = flameColor;
+      ctx.beginPath();
+      ctx.arc(projectile.x - projectile.vx * index * 1.4, projectile.y - projectile.vy * index * 1.4, trailRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.shadowColor = flameColor;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
     ctx.beginPath();
-    ctx.arc(projectile.x, projectile.y, PROJECTILE_RADIUS + 4, 0, Math.PI * 2);
+    ctx.arc(projectile.x, projectile.y, PROJECTILE_RADIUS + 7, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#8bd4ff";
+    ctx.fillStyle = flameColor;
     ctx.beginPath();
     ctx.arc(projectile.x, projectile.y, PROJECTILE_RADIUS, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   });
 }
 
@@ -364,7 +526,7 @@ function drawEffects() {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.shadowColor = effect.color;
-    ctx.shadowBlur = 16;
+    ctx.shadowBlur = effect.type === "afterimage" ? 28 : effect.type === "void" ? 30 : 16;
     ctx.strokeStyle = effect.color;
     ctx.fillStyle = effect.color;
     if (effect.type === "ring") {
@@ -373,6 +535,25 @@ function drawEffects() {
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (effect.type === "afterimage") {
+      ctx.lineWidth = 2.5 + alpha * 4;
+      ctx.beginPath();
+      ctx.ellipse(effect.x, effect.y, effect.radius, effect.radius * 0.42, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "flame") {
+      ctx.lineWidth = 2 + alpha * 4;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius * (0.8 + alpha), 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (effect.type === "void") {
+      ctx.lineWidth = 2.5 + alpha * 3;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(12, 10, 22, 0.58)";
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius * 0.7, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, effect.radius * alpha, 0, Math.PI * 2);
@@ -380,6 +561,51 @@ function drawEffects() {
     }
     ctx.restore();
   });
+}
+
+function spawnFlameBurst(x, y, color, count = 16) {
+  effects.push({ type: "ring", x, y, color, radius: 10, life: 180, maxLife: 180 });
+  for (let index = 0; index < count; index += 1) {
+    const angle = (Math.PI * 2 * index) / count + Math.random() * 0.4;
+    const speed = 1.5 + Math.random() * 2.8;
+    effects.push({
+      type: "flame",
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 0.4,
+      color,
+      radius: 4 + Math.random() * 6,
+      life: 180 + Math.random() * 80,
+      maxLife: 260,
+    });
+  }
+}
+
+function spawnVoidMarker(x, y) {
+  effects.push({
+    type: "void",
+    x,
+    y,
+    color: "#312a59",
+    radius: 14,
+    life: 420,
+    maxLife: 420,
+  });
+  for (let index = 0; index < 8; index += 1) {
+    const angle = (Math.PI * 2 * index) / 8;
+    effects.push({
+      type: "particle",
+      x,
+      y,
+      vx: Math.cos(angle) * (2 + Math.random() * 2),
+      vy: Math.sin(angle) * (2 + Math.random() * 2),
+      color: "#7c6cff",
+      radius: 2 + Math.random() * 2,
+      life: 200 + Math.random() * 150,
+      maxLife: 350,
+    });
+  }
 }
 
 function spawnImpact(x, y, color, count = 12) {
@@ -401,6 +627,25 @@ function spawnImpact(x, y, color, count = 12) {
   }
 }
 
+function spawnAttackTrail(player, count = 4) {
+  const centerX = player.x + PLAYER_WIDTH / 2;
+  const centerY = player.y + PLAYER_HEIGHT * 0.52;
+  const color = player.id === 1 ? "#ff6d7c" : "#81ecff";
+  for (let index = 0; index < count; index += 1) {
+    effects.push({
+      type: "afterimage",
+      x: centerX + player.facing * (8 + index * 12),
+      y: centerY + (Math.random() - 0.5) * 12,
+      vx: player.facing * (0.5 + index * 0.35),
+      vy: (Math.random() - 0.5) * 0.8,
+      color,
+      radius: 10 + index * 5,
+      life: 120 + index * 18,
+      maxLife: 180,
+    });
+  }
+}
+
 function updateEffects() {
   for (let index = effects.length - 1; index >= 0; index -= 1) {
     const effect = effects[index];
@@ -411,9 +656,28 @@ function updateEffects() {
       effect.vx *= 0.94;
       effect.vy *= 0.94;
     }
+    if (effect.type === "afterimage") {
+      effect.x += effect.vx;
+      effect.y += effect.vy;
+      effect.vx *= 0.9;
+      effect.vy *= 0.96;
+    }
+    if (effect.type === "flame") {
+      effect.x += effect.vx;
+      effect.y += effect.vy;
+      effect.vx *= 0.96;
+      effect.vy *= 0.98;
+      effect.vy += 0.04;
+    }
+    if (effect.type === "void") {
+      effect.radius += 0.35;
+    }
     if (effect.life <= 0) effects.splice(index, 1);
   }
   players.forEach((player) => {
+    if (player.attackTimer > 0 && player.health > 0 && Math.random() < 0.7) {
+      spawnAttackTrail(player, 3);
+    }
     player.hitFlash = Math.max(0, player.hitFlash - 16);
   });
   screenShakeTimer = Math.max(0, screenShakeTimer - 16);
@@ -758,6 +1022,7 @@ function attackPlayer(player) {
   if (player.attackTimer === 0 && player.health > 0 && !gameOver) {
     player.attackTimer = BASIC_ATTACK.duration;
     player.attackHit.clear();
+    spawnAttackTrail(player, 8);
     updateHealthUI();
   }
 }
@@ -766,14 +1031,33 @@ function useSkill(player) {
   if (player.skillCooldown > 0 || player.health <= 0 || gameOver) return;
 
   if (player.id === 1) {
-    player.x = Math.max(
+    const previousX = player.x;
+    const previousY = player.y + PLAYER_HEIGHT / 2;
+    const destinationX = Math.max(
       0,
       Math.min(canvas.width - PLAYER_WIDTH, player.x + player.facing * SKILL_DISTANCE),
     );
+    player.x = destinationX;
     player.vx = 0;
+    for (let index = 0; index < 10; index += 1) {
+      effects.push({
+        type: "afterimage",
+        x: previousX + PLAYER_WIDTH / 2 + (player.facing * (index + 1) * 10),
+        y: previousY + (Math.random() - 0.5) * 16,
+        vx: player.facing * (1.5 + index * 0.2),
+        vy: (Math.random() - 0.5) * 1.2,
+        color: "#a5b7ff",
+        radius: 12 + index * 2,
+        life: 180 + index * 18,
+        maxLife: 220,
+      });
+    }
+    spawnVoidMarker(previousX + PLAYER_WIDTH / 2, previousY);
+    spawnImpact(destinationX + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#7a7cff", 18);
   } else {
     const originX = player.x + PLAYER_WIDTH / 2;
     const originY = player.y + PLAYER_HEIGHT / 2;
+    spawnFlameBurst(originX, originY, "#ff9745", 18);
     for (let index = 0; index < PROJECTILE_COUNT; index += 1) {
       const angle = (Math.PI * 2 * index) / PROJECTILE_COUNT;
       projectiles.push({
