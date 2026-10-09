@@ -14,17 +14,19 @@ const FRICTION = 0.85;
 const PLAYER_WIDTH = 48;
 const PLAYER_HEIGHT = 68;
 const MAX_HEALTH = 200;
-const BASIC_ATTACK = { duration: 180, range: 50, damage: 14, height: 0.5 };
+const BASIC_ATTACK = { duration: 180, range: 50, damage: 8, height: 0.5 };
 const SKILL_DISTANCE = 180;
 const SKILL_COOLDOWN = 3000;
 const PROJECTILE_COUNT = 8;
 const PROJECTILE_SPEED = 7;
 const PROJECTILE_DAMAGE = 8;
 const PROJECTILE_RADIUS = 8;
+const HEAL_AMOUNT = 18;
+const HEAL_COOLDOWN = 8000;
 const HOOK_SPEED = 14;
 const HOOK_RANGE = 560;
 const HOOK_PULL_SPEED = 11;
-const DECOY_LIFETIME = 2800;
+const DECOY_LIFETIME = 4800;
 const ULTIMATE_COOLDOWN = 25000;
 const ULTIMATE_DASH_DISTANCE = 90;
 const ULTIMATE_STRIKE_COUNT = 4;
@@ -78,9 +80,10 @@ const players = [
     attackTimer: 0,
     hitFlash: 0,
     skillCooldown: 0,
+    healCooldown: 0,
     decoyCooldown: 0,
     attackHit: new Set(),
-    controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", decoy: "/" },
+    controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", heal: "5", decoy: "/" },
   },
 ];
 
@@ -116,6 +119,7 @@ function resetGame() {
     player.hitFlash = 0;
     player.skillCooldown = 0;
     player.hookCooldown = 0;
+    player.healCooldown = 0;
     player.decoyCooldown = 0;
     player.ultimateCooldown = 0;
     player.ultimateState = null;
@@ -147,7 +151,13 @@ function updateHealthUI() {
   decoyStatus.textContent = players[1].decoyCooldown > 0
     ? `${(players[1].decoyCooldown / 1000).toFixed(1)} 秒`
     : "就緒";
-  if (players[0].ultimateCooldown > 0) {
+    const player2HealText = document.getElementById("healStatus");
+    if (player2HealText) {
+      player2HealText.textContent = players[1].healCooldown > 0
+        ? `${(players[1].healCooldown / 1000).toFixed(1)} 秒`
+        : "就緒";
+    }
+    if (players[0].ultimateCooldown > 0) {
     skill1.textContent = `R ${(players[0].ultimateCooldown / 1000).toFixed(1)} 秒`;
   } else if (players[0].skillCooldown > 0) {
     skill1.textContent = `${(players[0].skillCooldown / 1000).toFixed(1)} 秒`;
@@ -521,15 +531,18 @@ function drawDecoys() {
     if (!owner) return;
     const fade = Math.min(1, decoy.life / 350);
     ctx.save();
-    ctx.globalAlpha = fade * 0.68;
+    ctx.globalAlpha = fade * 0.72;
+    ctx.shadowColor = "#8ae7ff";
+    ctx.shadowBlur = 18;
     drawPlayer({
       ...owner,
       x: decoy.x,
       y: decoy.y,
       vx: decoy.vx,
-      vy: 0,
-      hitFlash: 0,
-      attackTimer: 0,
+      vy: decoy.vy,
+      hitFlash: decoy.hitFlash || 0,
+      attackTimer: decoy.attackTimer || 0,
+      facing: decoy.facing,
       onGround: decoy.onGround,
     });
     ctx.restore();
@@ -578,6 +591,18 @@ function drawEffects() {
       ctx.stroke();
       ctx.beginPath();
       ctx.ellipse(effect.x + effect.radius * 0.15, effect.y - effect.radius * 0.25, effect.radius * 0.55, effect.radius * 0.88, effect.rotation || 0, 0.2, Math.PI * 1.8);
+      ctx.stroke();
+    } else if (effect.type === "heal") {
+      ctx.lineWidth = 2.5 + alpha * 4;
+      ctx.strokeStyle = effect.color;
+      ctx.beginPath();
+      ctx.arc(effect.x, effect.y, effect.radius * (1 + alpha * 0.8), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(effect.x - effect.radius * 0.7, effect.y);
+      ctx.lineTo(effect.x + effect.radius * 0.7, effect.y);
+      ctx.moveTo(effect.x, effect.y - effect.radius * 0.7);
+      ctx.lineTo(effect.x, effect.y + effect.radius * 0.7);
       ctx.stroke();
     } else {
       ctx.beginPath();
@@ -660,6 +685,32 @@ function spawnRift(x, y, rotation = 0) {
   }
 }
 
+function spawnHealEffect(x, y) {
+  effects.push({
+    type: "heal",
+    x,
+    y,
+    color: "#9dffca",
+    radius: 12,
+    life: 240,
+    maxLife: 240,
+  });
+  for (let index = 0; index < 18; index += 1) {
+    const angle = (Math.PI * 2 * index) / 18;
+    effects.push({
+      type: "particle",
+      x,
+      y,
+      vx: Math.cos(angle) * (1.2 + Math.random() * 2),
+      vy: -0.6 + Math.sin(angle) * (1.0 + Math.random() * 2),
+      color: "#7dffb8",
+      radius: 2 + Math.random() * 3,
+      life: 220 + Math.random() * 160,
+      maxLife: 300,
+    });
+  }
+}
+
 function spawnImpact(x, y, color, count = 12) {
   effects.push({ type: "ring", x, y, color, radius: 10, life: 260, maxLife: 260 });
   for (let index = 0; index < count; index += 1) {
@@ -727,6 +778,10 @@ function updateEffects() {
     if (effect.type === "rift") {
       effect.radius += 0.7;
       effect.rotation += 0.18;
+    }
+    if (effect.type === "heal") {
+      effect.radius += 0.45;
+      effect.y -= 0.15;
     }
     if (effect.life <= 0) effects.splice(index, 1);
   }
@@ -810,6 +865,9 @@ function updatePlayers() {
     }
     player.skillCooldown = Math.max(0, player.skillCooldown - 16);
     player.hookCooldown = Math.max(0, player.hookCooldown - 16);
+    if (player.healCooldown !== undefined) {
+      player.healCooldown = Math.max(0, player.healCooldown - 16);
+    }
     player.decoyCooldown = Math.max(0, player.decoyCooldown - 16);
     if (player.id === 1) {
       player.ultimateCooldown = Math.max(0, player.ultimateCooldown - 16);
@@ -991,9 +1049,84 @@ function updateHooks() {
 function updateDecoys() {
   for (let index = decoys.length - 1; index >= 0; index -= 1) {
     const decoy = decoys[index];
-    decoy.x += decoy.vx;
     decoy.life -= 16;
+    decoy.attackCooldown = Math.max(0, (decoy.attackCooldown || 0) - 16);
+    decoy.hitFlash = Math.max(0, (decoy.hitFlash || 0) - 16);
+    decoy.actionTimer = Math.max(0, (decoy.actionTimer || 0) - 16);
+    decoy.attackTimer = Math.max(0, (decoy.attackTimer || 0) - 16);
+    decoy.trickTimer = Math.max(0, (decoy.trickTimer || 0) - 16);
+
+    const target = players.find((player) => player.id !== decoy.ownerId && player.health > 0);
+    if (target) {
+      const targetCenterX = target.x + PLAYER_WIDTH / 2;
+      const decoyCenterX = decoy.x + PLAYER_WIDTH / 2;
+      const dx = targetCenterX - decoyCenterX;
+      const distance = Math.abs(dx);
+      decoy.facing = dx >= 0 ? 1 : -1;
+
+      if (decoy.actionTimer <= 0) {
+        decoy.actionTimer = 180 + Math.random() * 170;
+        decoy.behavior = Math.random();
+      }
+
+      if (decoy.behavior < 0.35) {
+        decoy.vx += decoy.facing * 1.2;
+        if (Math.random() < 0.06 && decoy.onGround) {
+          decoy.vy = -14 - Math.random() * 2;
+          decoy.onGround = false;
+          decoy.jumpsRemaining = 1;
+        }
+      } else if (decoy.behavior < 0.7) {
+        decoy.vx -= decoy.facing * 0.8;
+      } else {
+        decoy.vx += (Math.random() * 2 - 1) * 1.5;
+      }
+
+      if (distance <= 32 && decoy.attackCooldown === 0) {
+        decoy.attackTimer = 140;
+        decoy.attackCooldown = 420 + Math.random() * 180;
+        target.health = Math.max(0, target.health - 3);
+        target.hitFlash = 150;
+        applyHitReaction(target, { x: decoy.x, y: decoy.y, facing: decoy.facing });
+        spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#69d7ff", 14);
+        if (target.health <= 0) {
+          message.textContent = `玩家 ${target.id} 被擊倒！`;
+        }
+        updateHealthUI();
+      }
+
+      if (decoy.trickTimer <= 0 && decoy.onGround) {
+        decoy.trickTimer = 200 + Math.random() * 160;
+        decoy.vy = -13 - Math.random() * 4;
+        decoy.onGround = false;
+        decoy.jumpsRemaining = 1;
+      }
+
+      if ((Math.random() < 0.03 || distance < 18) && decoy.jumpsRemaining > 0 && decoy.onGround === false) {
+        decoy.vy = -12 - Math.random() * 4;
+        decoy.jumpsRemaining -= 1;
+      }
+    }
+
+    decoy.vy += GRAVITY;
+    decoy.x += decoy.vx;
+    decoy.y += decoy.vy;
+    decoy.vx *= 0.88;
+    decoy.vy *= 0.96;
+    decoy.vx = Math.max(-7.0, Math.min(7.0, decoy.vx));
+
+    if (decoy.x < 40 || decoy.x > canvas.width - PLAYER_WIDTH - 40) {
+      decoy.vx *= -1;
+      decoy.facing *= -1;
+    }
+    if (decoy.y + PLAYER_HEIGHT >= GROUND_Y) {
+      decoy.y = GROUND_Y - PLAYER_HEIGHT;
+      decoy.vy = 0;
+      decoy.onGround = true;
+      decoy.jumpsRemaining = 2;
+    }
     decoy.x = Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, decoy.x));
+
     if (decoy.life <= 0) {
       spawnImpact(decoy.x + PLAYER_WIDTH / 2, decoy.y + PLAYER_HEIGHT / 2, "#70faff", 6);
       decoys.splice(index, 1);
@@ -1288,6 +1421,37 @@ function useUltimate(player) {
   }
 }
 
+function useHeal(player) {
+  if (player.id !== 2) return;
+  if (player.healCooldown > 0 || player.health <= 0 || gameOver) return;
+
+  const previousHealth = player.health;
+  player.health = Math.min(MAX_HEALTH, player.health + HEAL_AMOUNT);
+  player.healCooldown = HEAL_COOLDOWN;
+
+  const centerX = player.x + PLAYER_WIDTH / 2;
+  const centerY = player.y + PLAYER_HEIGHT / 2;
+  spawnHealEffect(centerX, centerY);
+  spawnImpact(centerX, centerY, "#83f7b3", 18);
+  for (let index = 0; index < 12; index += 1) {
+    effects.push({
+      type: "afterimage",
+      x: centerX + (Math.random() - 0.5) * 30,
+      y: centerY + (Math.random() - 0.5) * 20,
+      vx: (Math.random() - 0.5) * 2,
+      vy: -0.8 - Math.random() * 1.2,
+      color: "#9dffca",
+      radius: 10 + index * 2,
+      life: 140 + index * 12,
+      maxLife: 180,
+    });
+  }
+  if (player.health > previousHealth) {
+    message.textContent = `玩家 ${player.id} 使用治療，恢復 ${player.health - previousHealth} 點生命！`;
+  }
+  updateHealthUI();
+}
+
 function useHook(player) {
   if (player.hookCooldown > 0 || player.health <= 0 || gameOver) return;
   const originX = player.x + PLAYER_WIDTH / 2 + player.facing * 25;
@@ -1310,17 +1474,30 @@ function useDecoys(player) {
   if (player.decoyCooldown > 0 || player.health <= 0 || gameOver) return;
   const offsets = [-1, 0, 1];
   offsets.forEach((offset) => {
+    const cloneX = Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, player.x + offset * 60));
+    const cloneY = player.y + (offset === 0 ? -12 : 8);
     decoys.push({
       id: `decoy-${nextDecoyId}`,
       ownerId: player.id,
-      x: Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, player.x + offset * 68)),
-      y: player.y - (offset === 0 ? 18 : 0),
-      vx: offset * 0.45,
+      x: cloneX,
+      y: cloneY,
+      vx: player.facing * (2.8 + Math.random() * 1.5),
+      vy: 0,
       life: DECOY_LIFETIME,
+      attackCooldown: 160 + Math.random() * 220,
+      attackTimer: 0,
+      hitFlash: 0,
+      facing: player.facing,
+      onGround: true,
+      behavior: Math.random(),
+      actionTimer: 120 + Math.random() * 180,
+      seed: Math.random() * 2.2,
+      jumpsRemaining: 2,
+      trickTimer: 30 + Math.random() * 60,
     });
     nextDecoyId += 1;
   });
-  player.decoyCooldown = 7000;
+  player.decoyCooldown = 14500;
   spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#70faff", 18);
   updateHealthUI();
 }
@@ -1342,6 +1519,7 @@ window.addEventListener("keydown", (event) => {
     if (key === player.controls.jump) jumpPlayer(player);
     if (key === player.controls.attack) attackPlayer(player);
     if (key === player.controls.skill) useSkill(player);
+    if (key === player.controls.heal) useHeal(player);
     if (key === player.controls.ultimate) useUltimate(player);
     if (key === player.controls.hook) useHook(player);
     if (key === player.controls.decoy) useDecoys(player);
