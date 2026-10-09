@@ -13,6 +13,7 @@ const GRAVITY = 0.9;
 const FRICTION = 0.85;
 const PLAYER_WIDTH = 48;
 const PLAYER_HEIGHT = 68;
+const MAX_HEALTH = 200;
 const BASIC_ATTACK = { duration: 180, range: 50, damage: 14, height: 0.5 };
 const SKILL_DISTANCE = 180;
 const SKILL_COOLDOWN = 3000;
@@ -24,6 +25,10 @@ const HOOK_SPEED = 14;
 const HOOK_RANGE = 560;
 const HOOK_PULL_SPEED = 11;
 const DECOY_LIFETIME = 2800;
+const ULTIMATE_COOLDOWN = 25000;
+const ULTIMATE_DASH_DISTANCE = 90;
+const ULTIMATE_STRIKE_COUNT = 4;
+const ULTIMATE_STRIKE_INTERVAL = 300;
 const SCREEN_SHAKE_DURATION = 180;
 const SCREEN_SHAKE_INTENSITY = 9;
 const SCREEN_SHAKE_VIBRATION_MULTIPLIER = 1.5;
@@ -47,15 +52,17 @@ const players = [
     vx: 0,
     vy: 0,
     facing: 1,
-    health: 100,
+    health: MAX_HEALTH,
     onGround: true,
     jumpsRemaining: 2,
     attackTimer: 0,
     hitFlash: 0,
     skillCooldown: 0,
     hookCooldown: 0,
+    ultimateCooldown: 0,
+    ultimateState: null,
     attackHit: new Set(),
-    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "q", hook: "e" },
+    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "q", hook: "e", ultimate: "r" },
   },
   {
     id: 2,
@@ -65,7 +72,7 @@ const players = [
     vx: 0,
     vy: 0,
     facing: 1,
-    health: 100,
+    health: MAX_HEALTH,
     onGround: true,
     jumpsRemaining: 2,
     attackTimer: 0,
@@ -102,7 +109,7 @@ function resetGame() {
     player.vx = 0;
     player.vy = 0;
     player.facing = Math.random() < 0.5 ? -1 : 1;
-    player.health = 100;
+    player.health = MAX_HEALTH;
     player.onGround = true;
     player.jumpsRemaining = 2;
     player.attackTimer = 0;
@@ -110,6 +117,8 @@ function resetGame() {
     player.skillCooldown = 0;
     player.hookCooldown = 0;
     player.decoyCooldown = 0;
+    player.ultimateCooldown = 0;
+    player.ultimateState = null;
     player.attackHit.clear();
   });
   projectiles.length = 0;
@@ -138,6 +147,13 @@ function updateHealthUI() {
   decoyStatus.textContent = players[1].decoyCooldown > 0
     ? `${(players[1].decoyCooldown / 1000).toFixed(1)} 秒`
     : "就緒";
+  if (players[0].ultimateCooldown > 0) {
+    skill1.textContent = `R ${(players[0].ultimateCooldown / 1000).toFixed(1)} 秒`;
+  } else if (players[0].skillCooldown > 0) {
+    skill1.textContent = `${(players[0].skillCooldown / 1000).toFixed(1)} 秒`;
+  } else {
+    skill1.textContent = "就緒";
+  }
 }
 
 function drawBackground() {
@@ -554,6 +570,15 @@ function drawEffects() {
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, effect.radius * 0.7, 0, Math.PI * 2);
       ctx.fill();
+    } else if (effect.type === "rift") {
+      ctx.lineWidth = 2.5 + alpha * 5;
+      ctx.strokeStyle = "rgba(164, 130, 255, 0.9)";
+      ctx.beginPath();
+      ctx.ellipse(effect.x, effect.y, effect.radius, effect.radius * 1.6, effect.rotation || 0, 0.3, Math.PI * 1.7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(effect.x + effect.radius * 0.15, effect.y - effect.radius * 0.25, effect.radius * 0.55, effect.radius * 0.88, effect.rotation || 0, 0.2, Math.PI * 1.8);
+      ctx.stroke();
     } else {
       ctx.beginPath();
       ctx.arc(effect.x, effect.y, effect.radius * alpha, 0, Math.PI * 2);
@@ -604,6 +629,33 @@ function spawnVoidMarker(x, y) {
       radius: 2 + Math.random() * 2,
       life: 200 + Math.random() * 150,
       maxLife: 350,
+    });
+  }
+}
+
+function spawnRift(x, y, rotation = 0) {
+  effects.push({
+    type: "rift",
+    x,
+    y,
+    color: "#ad9bff",
+    radius: 20,
+    rotation,
+    life: 260,
+    maxLife: 260,
+  });
+  for (let index = 0; index < 16; index += 1) {
+    const angle = (Math.PI * 2 * index) / 16;
+    effects.push({
+      type: "particle",
+      x,
+      y,
+      vx: Math.cos(angle) * (3 + Math.random() * 3),
+      vy: Math.sin(angle) * (3 + Math.random() * 3),
+      color: "#8b7dff",
+      radius: 2 + Math.random() * 3,
+      life: 200 + Math.random() * 180,
+      maxLife: 360,
     });
   }
 }
@@ -671,6 +723,10 @@ function updateEffects() {
     }
     if (effect.type === "void") {
       effect.radius += 0.35;
+    }
+    if (effect.type === "rift") {
+      effect.radius += 0.7;
+      effect.rotation += 0.18;
     }
     if (effect.life <= 0) effects.splice(index, 1);
   }
@@ -755,6 +811,47 @@ function updatePlayers() {
     player.skillCooldown = Math.max(0, player.skillCooldown - 16);
     player.hookCooldown = Math.max(0, player.hookCooldown - 16);
     player.decoyCooldown = Math.max(0, player.decoyCooldown - 16);
+    if (player.id === 1) {
+      player.ultimateCooldown = Math.max(0, player.ultimateCooldown - 16);
+      if (player.ultimateState) {
+        const state = player.ultimateState;
+        state.timer += 16;
+        const target = players.find((candidate) => candidate.id === state.targetId && candidate.health > 0);
+        if (!target) {
+          player.ultimateState = null;
+          if (player.ultimateCooldown === 0) {
+            player.ultimateCooldown = ULTIMATE_COOLDOWN;
+          }
+        } else {
+          const chaseX = target.x + PLAYER_WIDTH / 2 - player.facing * 30;
+          const chaseY = Math.min(player.y, target.y - 40);
+          player.x += (chaseX - player.x) * 0.2;
+          player.y += (chaseY - player.y) * 0.18;
+          player.facing = target.x >= player.x ? 1 : -1;
+          if (state.timer >= state.nextStrikeAt) {
+            executeUltimateSlash(player, target, state.slashIndex, ULTIMATE_STRIKE_COUNT);
+            state.slashIndex += 1;
+            state.nextStrikeAt += ULTIMATE_STRIKE_INTERVAL;
+            spawnRift(
+              target.x + PLAYER_WIDTH / 2,
+              target.y + PLAYER_HEIGHT / 2 - 10,
+              (player.facing === 1 ? 0.7 : -0.7),
+            );
+            spawnRift(
+              player.x + PLAYER_WIDTH / 2,
+              player.y + PLAYER_HEIGHT / 2 - 12,
+              (player.facing === 1 ? -0.8 : 0.8),
+            );
+          }
+          if (state.slashIndex >= ULTIMATE_STRIKE_COUNT) {
+            player.ultimateState = null;
+            if (player.ultimateCooldown === 0) {
+              player.ultimateCooldown = ULTIMATE_COOLDOWN;
+            }
+          }
+        }
+      }
+    }
   });
   updateHealthUI();
 }
@@ -970,7 +1067,7 @@ function drawHealthBars() {
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     ctx.fillRect(left, top, barWidth, barHeight);
     ctx.fillStyle = player.color;
-    const lifeWidth = (player.health / 100) * barWidth;
+    const lifeWidth = (player.health / MAX_HEALTH) * barWidth;
     ctx.fillRect(left, top, lifeWidth, barHeight);
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.strokeRect(left, top, barWidth, barHeight);
@@ -1075,6 +1172,122 @@ function useSkill(player) {
   updateHealthUI();
 }
 
+function findUltimateTarget(player) {
+  const facingRange = 150;
+  const centerX = player.x + PLAYER_WIDTH / 2;
+  const centerY = player.y + PLAYER_HEIGHT / 2;
+  const targets = players.filter((candidate) => candidate.id !== player.id && candidate.health > 0);
+  return targets.find((target) => {
+    const targetCenterX = target.x + PLAYER_WIDTH / 2;
+    const targetCenterY = target.y + PLAYER_HEIGHT / 2;
+    const dx = targetCenterX - centerX;
+    const dy = targetCenterY - centerY;
+    const distance = Math.hypot(dx, dy);
+    const inFront = player.facing === 1 ? dx > 0 : dx < 0;
+    return inFront && distance <= facingRange && Math.abs(dy) < 80;
+  }) || null;
+}
+
+function executeUltimateSlash(player, target, index, total) {
+  if (!target || target.health <= 0) {
+    player.ultimateState = null;
+    player.ultimateCooldown = ULTIMATE_COOLDOWN;
+    return;
+  }
+
+  const damage = index === total - 1 ? 30 : 7;
+  const strongHit = index === total - 1;
+  const slashX = player.x + PLAYER_WIDTH / 2 + player.facing * (32 + index * 20);
+  const slashY = player.y + PLAYER_HEIGHT / 2 - 12 + Math.sin(index * 1.2) * 12;
+  spawnImpact(slashX, slashY, strongHit ? "#fff4b2" : "#ff8c8c", strongHit ? 18 : 12);
+  spawnRift(slashX, slashY - 8, player.facing === 1 ? 0.9 : -0.9);
+
+  for (let i = 0; i < 10; i += 1) {
+    effects.push({
+      type: "afterimage",
+      x: slashX + (Math.random() - 0.5) * 34,
+      y: slashY + (Math.random() - 0.5) * 18,
+      vx: player.facing * (2.5 + i * 0.35),
+      vy: -0.8 - Math.random() * 1.8,
+      color: strongHit ? "#fff5a9" : "#ffcfba",
+      radius: 8 + i * 2.2,
+      life: 150 + i * 14,
+      maxLife: 200,
+    });
+  }
+
+  target.health = Math.max(0, target.health - damage);
+  target.hitFlash = 200;
+  target.vx = player.facing * (strongHit ? 12 : 7);
+  target.vy = strongHit ? -17 : -6;
+  target.onGround = false;
+  spawnImpact(
+    target.x + PLAYER_WIDTH / 2,
+    target.y + PLAYER_HEIGHT / 2,
+    strongHit ? "#fff1a8" : "#ff7d6e",
+    strongHit ? 20 : 12,
+  );
+  if (strongHit) {
+    spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#f3ecff", 16);
+    for (let i = 0; i < 12; i += 1) {
+      effects.push({
+        type: "afterimage",
+        x: target.x + PLAYER_WIDTH / 2 + (Math.random() - 0.5) * 35,
+        y: target.y + PLAYER_HEIGHT / 2 + (Math.random() - 0.5) * 20,
+        vx: player.facing * (1.2 + i * 0.25),
+        vy: -0.7 - Math.random() * 1.4,
+        color: "#ffd07a",
+        radius: 8 + i * 2,
+        life: 120 + i * 14,
+        maxLife: 180,
+      });
+    }
+  }
+  if (target.health <= 0) {
+    message.textContent = `玩家 ${target.id} 被擊倒！`;
+  }
+  updateHealthUI();
+}
+
+function useUltimate(player) {
+  if (player.id !== 1) return;
+  if (player.ultimateCooldown > 0 || player.health <= 0 || gameOver) return;
+
+  const target = findUltimateTarget(player);
+  const startX = player.x;
+  const dashX = Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, player.x + player.facing * ULTIMATE_DASH_DISTANCE));
+  player.x = dashX;
+  player.vx = 0;
+  if (!target) {
+    player.ultimateCooldown = ULTIMATE_COOLDOWN;
+    spawnImpact(startX + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#6a7cff", 20);
+    spawnImpact(dashX + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#a198ff", 10);
+    updateHealthUI();
+    return;
+  }
+
+  player.ultimateState = {
+    targetId: target.id,
+    timer: 0,
+    slashIndex: 0,
+    nextStrikeAt: ULTIMATE_STRIKE_INTERVAL,
+  };
+  spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#ffc0a6", 18);
+  for (let index = 0; index < 8; index += 1) {
+    effects.push({
+      type: "afterimage",
+      x: startX + PLAYER_WIDTH / 2 + player.facing * (18 + index * 10),
+      y: player.y + PLAYER_HEIGHT / 2 + (Math.random() - 0.5) * 18,
+      vx: player.facing * (2 + index * 0.5),
+      vy: (Math.random() - 0.5) * 1.2,
+      color: "#ffec99",
+      radius: 12 + index * 2,
+      life: 160 + index * 15,
+      maxLife: 200,
+    });
+  }
+}
+
 function useHook(player) {
   if (player.hookCooldown > 0 || player.health <= 0 || gameOver) return;
   const originX = player.x + PLAYER_WIDTH / 2 + player.facing * 25;
@@ -1113,7 +1326,7 @@ function useDecoys(player) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.target.closest('input, button')) return;
+  if (event.target && event.target.closest && event.target.closest('input, button')) return;
   if (window.duel && window.duel.keyboard(event, true)) return;
   const key = event.key.toLowerCase();
   if (key.startsWith('arrow')) event.preventDefault();
@@ -1129,6 +1342,7 @@ window.addEventListener("keydown", (event) => {
     if (key === player.controls.jump) jumpPlayer(player);
     if (key === player.controls.attack) attackPlayer(player);
     if (key === player.controls.skill) useSkill(player);
+    if (key === player.controls.ultimate) useUltimate(player);
     if (key === player.controls.hook) useHook(player);
     if (key === player.controls.decoy) useDecoys(player);
   });
