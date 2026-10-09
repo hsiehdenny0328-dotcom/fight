@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const status = $('networkStatus');
-  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'extra'];
+  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'extra', 'ultimate'];
   let mode = 'local', peer = null, connection = null, generation = 0;
   let connected = false, lastSeen = 0, lastSend = 0, timeout;
   const held = new Set();
@@ -15,6 +15,7 @@
   }
   function apply(player, action, down) {
     if (!actions.includes(action)) return;
+    if (action === 'ultimate' && player.id !== 1) return;
     const key = controls(player, action);
     if (!down) { keys.delete(key); return; }
     if (!gameStarted || gameOver || keys.has(key)) return;
@@ -23,6 +24,7 @@
     if (action === 'attack') attackPlayer(player);
     if (action === 'skill') useSkill(player);
     if (action === 'extra') (player.id === 1 ? useHook : useDecoys)(player);
+    if (action === 'ultimate') useUltimate(player);
   }
   function input(action, down) {
     if (down === held.has(action)) return;

@@ -1204,6 +1204,13 @@ function drawHealthBars() {
     ctx.fillRect(left, top, lifeWidth, barHeight);
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.strokeRect(left, top, barWidth, barHeight);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px sans-serif";
+    ctx.textAlign = index === 0 ? "left" : "right";
+    ctx.textBaseline = "middle";
+    const percentage = `${Math.round((player.health / MAX_HEALTH) * 100)}%`;
+    const textX = index === 0 ? left + barWidth + 8 : left - 8;
+    ctx.fillText(percentage, textX, top + barHeight / 2);
   });
 }
 
@@ -1503,7 +1510,7 @@ function useDecoys(player) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.target && event.target.closest && event.target.closest('input, button')) return;
+  if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
   if (window.duel && window.duel.keyboard(event, true)) return;
   const key = event.key.toLowerCase();
   if (key.startsWith('arrow')) event.preventDefault();
