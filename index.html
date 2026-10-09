@@ -9,29 +9,19 @@
 <body>
   <div class="app-container">
     <h1>雙人決鬥</h1>
-    <section class="online-panel" aria-label="線上對戰">
-      <div class="online-actions">
-        <button id="createRoom" type="button">建立線上房間</button>
-        <form id="joinRoomForm">
-          <label for="roomCodeInput">房號</label>
-          <input id="roomCodeInput" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="輸入 6 位房號" autocomplete="off" />
-          <button type="submit">加入房間</button>
-        </form>
-      </div>
-      <p class="online-help">建立房間後把 6 位房號或邀請連結傳給朋友；朋友輸入房號加入後即可開始 1 對 1 對戰。</p>
-      <div class="room-info" aria-live="polite">
-        <span id="roomStatus">本機雙人模式</span>
-        <button id="leaveRoom" type="button" hidden>離開房間</button>
-      </div>
-      <div id="roomShare" class="room-share" hidden>
-        <label for="roomCodeDisplay">分享房號</label>
-        <input id="roomCodeDisplay" type="text" aria-label="房間號碼" readonly />
-        <button id="copyRoomCode" type="button">複製房號</button>
-        <button id="shareRoomLink" type="button">分享邀請連結</button>
-        <span id="roomShareFeedback" aria-live="polite"></span>
-      </div>
+    <section class="lobby" aria-label="手機連線對戰">
+      <p>兩支手機開啟此頁，一人建立房間，另一人輸入房號加入。建議橫向遊玩。</p>
+      <div class="room-actions"><button id="createRoom">建立房間</button>
+      <label>房號 <input id="roomCode" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="8 碼房號"></label>
+      <button id="joinRoom">加入房間</button><button id="leaveRoom" hidden>離開連線</button></div>
+      <p id="networkStatus" role="status" aria-live="polite">單機模式 · 可使用下方鍵盤操作</p>
+      <button id="startGame">開始遊戲</button>
     </section>
     <canvas id="gameCanvas" width="1100" height="520"></canvas>
+    <div id="touchControls" class="touch-controls" aria-label="觸控操作">
+      <div><button data-action="left" aria-label="向左">◀</button><button data-action="right" aria-label="向右">▶</button></div>
+      <div><button data-action="jump">跳躍</button><button data-action="attack">普攻</button><button data-action="skill">瞬移</button><button data-action="extra">勾索</button></div>
+    </div>
     <div class="status">
       <div id="message">按空白鍵開始遊戲</div>
       <div class="health-bars">
@@ -54,6 +44,8 @@
       </div>
     </div>
   </div>
+  <script src="peerjs.min.js"></script>
   <script src="script.js"></script>
+  <script src="multiplayer.js"></script>
 </body>
 </html>

@@ -7,16 +7,6 @@ const skill1 = document.getElementById("skill1");
 const skill2 = document.getElementById("skill2");
 const hookStatus = document.getElementById("hookStatus");
 const decoyStatus = document.getElementById("decoyStatus");
-const createRoomButton = document.getElementById("createRoom");
-const joinRoomForm = document.getElementById("joinRoomForm");
-const roomCodeInput = document.getElementById("roomCodeInput");
-const roomStatus = document.getElementById("roomStatus");
-const leaveRoomButton = document.getElementById("leaveRoom");
-const roomShare = document.getElementById("roomShare");
-const roomCodeDisplay = document.getElementById("roomCodeDisplay");
-const copyRoomCodeButton = document.getElementById("copyRoomCode");
-const shareRoomLinkButton = document.getElementById("shareRoomLink");
-const roomShareFeedback = document.getElementById("roomShareFeedback");
 
 const GROUND_Y = 440;
 const GRAVITY = 0.9;
@@ -47,10 +37,6 @@ let gameStarted = false;
 let gameOver = false;
 let nextDecoyId = 0;
 let screenShakeTimer = 0;
-let onlineSession = null;
-let remotePlayerConnected = false;
-let remoteInputQueue = Promise.resolve();
-let snapshotInFlight = false;
 
 const players = [
   {
@@ -135,318 +121,6 @@ function resetGame() {
   gameOver = false;
   message.textContent = "雙人決鬥開始！擊倒對手獲勝。";
   updateHealthUI();
-}
-
-function setRoomStatus(text) {
-  if (roomStatus.textContent !== text) {
-    roomStatus.textContent = text;
-  }
-}
-
-async function roomRequest(path, data) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return readRoomResponse(response);
-}
-
-async function readRoomResponse(response) {
-  let result;
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error(`伺服器回應格式錯誤 (${response.status})`);
-  }
-  if (!response.ok) throw new Error(result.error || `伺服器錯誤 (${response.status})`);
-  return result;
-}
-
-function showRoomError(error) {
-  const detail = error instanceof TypeError
-    ? "無法連線到遊戲伺服器。請先執行 start-server.bat，再從 http://localhost:8000 開啟遊戲。"
-    : error instanceof Error
-      ? error.message
-      : String(error);
-  setRoomStatus(`線上連線失敗：${detail}`);
-  message.textContent = `線上連線失敗：${detail}`;
-}
-
-function setOnlineSession(role, roomCode) {
-  onlineSession = { role, roomCode };
-  remotePlayerConnected = false;
-  remoteInputQueue = Promise.resolve();
-  gameStarted = false;
-  gameOver = false;
-  keys.clear();
-  createRoomButton.disabled = true;
-  joinRoomForm.querySelector("button").disabled = true;
-  leaveRoomButton.hidden = false;
-  roomCodeDisplay.value = roomCode;
-  roomShareFeedback.textContent = "";
-  roomShare.hidden = false;
-  const roleName = role === "host" ? "房主（玩家 1）" : "玩家 2";
-  setRoomStatus(role === "host" ? `${roleName} · 等待玩家加入` : `${roleName} · 已加入房間`);
-  message.textContent = role === "host"
-    ? `房間已建立，請分享房號 ${roomCode} 邀請對手。`
-    : "已加入房間，正在等待房主開始對戰。";
-  pollOnlineRoom(onlineSession);
-}
-
-async function createOnlineRoom() {
-  createRoomButton.disabled = true;
-  try {
-    const result = await roomRequest("/api/rooms", {});
-    setOnlineSession("host", result.roomCode);
-  } catch (error) {
-    createRoomButton.disabled = false;
-    showRoomError(error);
-  }
-}
-
-async function joinRoomByCode(roomCode) {
-  if (!/^\d{6}$/.test(roomCode)) {
-    showRoomError(new Error("請輸入 6 位數房號。"));
-    return;
-  }
-
-  const joinButton = joinRoomForm.querySelector("button");
-  joinButton.disabled = true;
-  try {
-    await roomRequest("/api/rooms/join", { roomCode });
-    setOnlineSession("guest", roomCode);
-  } catch (error) {
-    joinButton.disabled = false;
-    showRoomError(error);
-  }
-}
-
-async function joinOnlineRoom(event) {
-  event.preventDefault();
-  await joinRoomByCode(roomCodeInput.value.trim());
-}
-
-function controlAction(player, key) {
-  return Object.entries(player.controls).find(([, controlKey]) => controlKey === key)?.[0] || null;
-}
-
-function applyRemoteInput(action, pressed) {
-  const player = players[1];
-  const movementControl = player.controls[action];
-  if (action === "restart" && pressed) {
-    resetGame();
-    return;
-  }
-  if (!movementControl) return;
-
-  if (pressed) {
-    keys.add(movementControl);
-    if (action === "jump") jumpPlayer(player);
-    if (action === "attack") attackPlayer(player);
-    if (action === "skill") useSkill(player);
-    if (action === "hook") useHook(player);
-    if (action === "decoy") useDecoys(player);
-  } else {
-    keys.delete(movementControl);
-  }
-}
-
-function sendRemoteInput(action, pressed) {
-  const session = onlineSession;
-  if (!session || session.role !== "guest") return;
-  remoteInputQueue = remoteInputQueue
-    .then(() => roomRequest("/api/input", {
-      roomCode: session.roomCode,
-      action,
-      pressed,
-    }))
-    .catch((error) => {
-      if (onlineSession === session) showRoomError(error);
-    });
-}
-
-function getGameSnapshot() {
-  return {
-    players: players.map((player) => ({
-      ...player,
-      attackHit: [...player.attackHit],
-    })),
-    projectiles,
-    hooks,
-    decoys,
-    effects,
-    gameStarted,
-    gameOver,
-    nextDecoyId,
-    screenShakeTimer,
-    message: message.textContent,
-  };
-}
-
-function applyGameSnapshot(snapshot) {
-  snapshot.players.forEach((state, index) => {
-    const player = players[index];
-    Object.entries(state).forEach(([key, value]) => {
-      if (key !== "controls" && key !== "attackHit") player[key] = value;
-    });
-    player.attackHit = new Set(state.attackHit);
-  });
-  projectiles.splice(0, projectiles.length, ...snapshot.projectiles);
-  hooks.splice(0, hooks.length, ...snapshot.hooks);
-  decoys.splice(0, decoys.length, ...snapshot.decoys);
-  effects.splice(0, effects.length, ...snapshot.effects);
-  gameStarted = snapshot.gameStarted;
-  gameOver = snapshot.gameOver;
-  nextDecoyId = snapshot.nextDecoyId;
-  screenShakeTimer = snapshot.screenShakeTimer;
-  message.textContent = snapshot.message;
-  updateHealthUI();
-}
-
-async function pollOnlineRoom(session) {
-  if (onlineSession !== session) return;
-
-  try {
-    const query = new URLSearchParams({ roomCode: session.roomCode, role: session.role });
-    const state = await fetch(`/api/poll?${query}`).then(readRoomResponse);
-    if (onlineSession !== session) return;
-
-    if (session.role === "host") {
-      if (state.connected && !remotePlayerConnected) {
-        remotePlayerConnected = true;
-        resetGame();
-      } else if (!state.connected && remotePlayerConnected) {
-        remotePlayerConnected = false;
-        keys.delete(players[1].controls.left);
-        keys.delete(players[1].controls.right);
-        gameStarted = false;
-        message.textContent = "對手已離開房間，等待玩家重新加入。";
-      }
-      if (state.connected) {
-        state.inputs.forEach((input) => applyRemoteInput(input.action, input.pressed));
-        setRoomStatus(`房主（玩家 1） · 房號 ${session.roomCode} · 對手已連線`);
-      } else {
-        setRoomStatus(`房主（玩家 1） · 房號 ${session.roomCode} · 等待玩家加入`);
-      }
-    } else {
-      if (state.snapshot) applyGameSnapshot(state.snapshot);
-      setRoomStatus(`玩家 2 · 房號 ${session.roomCode} · 已連線`);
-    }
-  } catch (error) {
-    if (onlineSession === session) {
-      const detail = error instanceof Error ? error.message : String(error);
-      setRoomStatus(`連線中斷，重新連線中：${detail}`);
-    }
-  }
-
-  if (onlineSession === session) {
-    window.setTimeout(() => pollOnlineRoom(session), 60);
-  }
-}
-
-window.setInterval(async () => {
-  const session = onlineSession;
-  if (!session || session.role !== "host" || !remotePlayerConnected || !gameStarted || snapshotInFlight) return;
-  snapshotInFlight = true;
-  try {
-    await roomRequest("/api/state", {
-      roomCode: session.roomCode,
-      snapshot: getGameSnapshot(),
-    });
-  } catch (error) {
-    if (onlineSession === session) {
-      const detail = error instanceof Error ? error.message : String(error);
-      setRoomStatus(`同步失敗：${detail}`);
-    }
-  } finally {
-    snapshotInFlight = false;
-  }
-}, 50);
-
-function getRoomShareUrl() {
-  if (!onlineSession) return "";
-  const shareUrl = new URL(window.location.href);
-  shareUrl.searchParams.set("room", onlineSession.roomCode);
-  return shareUrl.href;
-}
-
-async function copyToClipboard(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      // Use the selection fallback when the browser denies clipboard permission.
-    }
-  }
-
-  const temporaryInput = document.createElement("textarea");
-  temporaryInput.value = text;
-  temporaryInput.setAttribute("readonly", "");
-  temporaryInput.style.position = "fixed";
-  temporaryInput.style.opacity = "0";
-  document.body.appendChild(temporaryInput);
-  temporaryInput.select();
-  const copied = document.execCommand("copy");
-  temporaryInput.remove();
-  if (!copied) throw new Error("瀏覽器不允許複製，請直接選取房號複製。");
-}
-
-async function copyRoomCode() {
-  if (!onlineSession) return;
-  try {
-    await copyToClipboard(onlineSession.roomCode);
-    roomShareFeedback.textContent = "房號已複製，可以分享給對手。";
-  } catch (error) {
-    showRoomError(error);
-  }
-}
-
-async function shareRoomLink() {
-  if (!onlineSession) return;
-  const url = getRoomShareUrl();
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: "雙人決鬥線上房間",
-        text: `加入我的遊戲房間，房號：${onlineSession.roomCode}`,
-        url,
-      });
-      roomShareFeedback.textContent = "已開啟分享功能。";
-    } else {
-      await copyToClipboard(url);
-      roomShareFeedback.textContent = "邀請連結已複製，傳送給對手即可加入。";
-    }
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") return;
-    showRoomError(error);
-  }
-}
-
-async function leaveOnlineRoom() {
-  const session = onlineSession;
-  if (!session) return;
-  onlineSession = null;
-  remotePlayerConnected = false;
-  keys.clear();
-  gameStarted = false;
-  gameOver = false;
-  leaveRoomButton.hidden = true;
-  roomShare.hidden = true;
-  roomShareFeedback.textContent = "";
-  createRoomButton.disabled = false;
-  joinRoomForm.querySelector("button").disabled = false;
-  setRoomStatus("本機雙人模式");
-  message.textContent = "已離開線上房間。按空白鍵開始本機雙人遊戲。";
-  try {
-    await roomRequest("/api/rooms/leave", {
-      roomCode: session.roomCode,
-      role: session.role,
-    });
-  } catch (error) {
-    showRoomError(error);
-  }
 }
 
 function updateHealthUI() {
@@ -1016,9 +690,9 @@ function checkGameOver() {
   if (alive.length <= 1 && gameStarted) {
     gameOver = true;
     if (alive.length === 1) {
-      message.textContent = `玩家 ${alive[0].id} 獲勝！按任意鍵重新開始。`;
+      message.textContent = `玩家 ${alive[0].id} 獲勝！請按「開始遊戲」或空白鍵再戰。`;
     } else {
-      message.textContent = "平手！雙方同時倒地。按任意鍵重新開始。";
+      message.textContent = "平手！雙方同時倒地。請按「開始遊戲」或空白鍵再戰。";
     }
   }
 }
@@ -1058,9 +732,14 @@ function draw() {
   ctx.restore();
 }
 
-function gameLoop() {
-  const isGuest = onlineSession?.role === "guest";
-  if (gameStarted && !gameOver && !isGuest) {
+let lastFrame = 0;
+let accumulated = 0;
+function gameLoop(now) {
+  accumulated += Math.min(100, now - (lastFrame || now));
+  lastFrame = now;
+  while (accumulated >= 1000 / 60) {
+    accumulated -= 1000 / 60;
+    if (gameStarted && !gameOver && (!window.duel || window.duel.canSimulate())) {
     updatePlayers();
     processAttacks();
     updateProjectiles();
@@ -1068,7 +747,9 @@ function gameLoop() {
     updateDecoys();
     updateEffects();
     checkGameOver();
+    }
   }
+  if (window.duel) window.duel.tick(now);
   draw();
   requestAnimationFrame(gameLoop);
 }
@@ -1148,26 +829,19 @@ function useDecoys(player) {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (event.target.closest('input, button')) return;
+  if (window.duel && window.duel.keyboard(event, true)) return;
   const key = event.key.toLowerCase();
+  if (key.startsWith('arrow')) event.preventDefault();
   if (event.code === "Space") {
     event.preventDefault();
-    if (!gameStarted || gameOver) {
-      if (onlineSession?.role === "guest") sendRemoteInput("restart", true);
-      else resetGame();
-    }
+    if (!gameStarted || gameOver) resetGame();
     return;
   }
 
   if (event.repeat) return;
-  if (onlineSession?.role === "guest") {
-    const action = controlAction(players[1], key);
-    if (action) sendRemoteInput(action, true);
-    return;
-  }
-
   keys.add(key);
-  const controlledPlayers = onlineSession?.role === "host" ? [players[0]] : players;
-  controlledPlayers.forEach((player) => {
+  players.forEach((player) => {
     if (key === player.controls.jump) jumpPlayer(player);
     if (key === player.controls.attack) attackPlayer(player);
     if (key === player.controls.skill) useSkill(player);
@@ -1177,27 +851,9 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
-  const key = event.key.toLowerCase();
-  if (onlineSession?.role === "guest") {
-    const action = controlAction(players[1], key);
-    if (action) sendRemoteInput(action, false);
-    return;
-  }
-  keys.delete(key);
+  if (window.duel && window.duel.keyboard(event, false)) return;
+  keys.delete(event.key.toLowerCase());
 });
-
-createRoomButton.addEventListener("click", createOnlineRoom);
-joinRoomForm.addEventListener("submit", joinOnlineRoom);
-leaveRoomButton.addEventListener("click", leaveOnlineRoom);
-copyRoomCodeButton.addEventListener("click", copyRoomCode);
-shareRoomLinkButton.addEventListener("click", shareRoomLink);
-
-const invitedRoomCode = new URLSearchParams(window.location.search).get("room");
-if (invitedRoomCode && /^\d{6}$/.test(invitedRoomCode)) {
-  roomCodeInput.value = invitedRoomCode;
-  setRoomStatus(`正在加入房間 ${invitedRoomCode}…`);
-  joinRoomByCode(invitedRoomCode);
-}
 
 resetGame();
 gameStarted = false;

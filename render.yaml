@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: fight-game
-    runtime: python
-    plan: free
-    buildCommand: "echo 'No dependencies to install'"
-    startCommand: "python server.py"
-    healthCheckPath: /healthz
