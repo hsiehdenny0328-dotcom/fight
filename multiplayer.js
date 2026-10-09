@@ -47,8 +47,8 @@
     $('createRoom').disabled = $('joinRoom').disabled = mode !== 'local';
     $('roomCode').readOnly = mode !== 'local';
     $('startGame').disabled = mode !== 'local' && (!connected || mode === 'guest');
-    document.querySelector('[data-action="skill"]').textContent = mode === 'guest' ? '波動拳' : '瞬移';
-    document.querySelector('[data-action="extra"]').textContent = mode === 'guest' ? '隱分身' : '勾索';
+    document.querySelector('[data-action="skill"]').textContent = mode === 'guest' ? '波動拳' : '瞬移 (G)';
+    document.querySelector('[data-action="extra"]').textContent = mode === 'guest' ? '隱分身' : '勾索 (Y)';
   }
   function stop(text = '已離開連線 · 單機模式') {
     generation++;
@@ -77,6 +77,8 @@
       attackTimer: player.attackTimer,
       hitFlash: player.hitFlash,
       skillCooldown: player.skillCooldown,
+      skillCharges: player.skillCharges,
+      skillRechargeTimer: player.skillRechargeTimer,
       hookCooldown: player.hookCooldown,
       healCooldown: player.healCooldown,
       decoyCooldown: player.decoyCooldown,

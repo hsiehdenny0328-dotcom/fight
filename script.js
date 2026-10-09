@@ -17,6 +17,7 @@ const MAX_HEALTH = 200;
 const BASIC_ATTACK = { duration: 180, range: 50, damage: 8, height: 0.5 };
 const SKILL_DISTANCE = 180;
 const SKILL_COOLDOWN = 3000;
+const MAX_SKILL_CHARGES = 3;
 const PROJECTILE_COUNT = 8;
 const PROJECTILE_SPEED = 7;
 const PROJECTILE_DAMAGE = 8;
@@ -60,11 +61,13 @@ const players = [
     attackTimer: 0,
     hitFlash: 0,
     skillCooldown: 0,
+    skillCharges: MAX_SKILL_CHARGES,
+    skillRechargeTimer: 0,
     hookCooldown: 0,
     ultimateCooldown: 0,
     ultimateState: null,
     attackHit: new Set(),
-    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "q", hook: "e", ultimate: "r" },
+    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", ultimate: "u" },
   },
   {
     id: 2,
@@ -118,6 +121,10 @@ function resetGame() {
     player.attackTimer = 0;
     player.hitFlash = 0;
     player.skillCooldown = 0;
+    if (player.id === 1) {
+      player.skillCharges = MAX_SKILL_CHARGES;
+      player.skillRechargeTimer = 0;
+    }
     player.hookCooldown = 0;
     player.healCooldown = 0;
     player.decoyCooldown = 0;
@@ -141,9 +148,15 @@ function updateHealthUI() {
   health2.textContent = players[1].health;
   players.forEach((player) => {
     const cooldownElement = player.id === 1 ? skill1 : skill2;
-    cooldownElement.textContent = player.skillCooldown > 0
-      ? `${(player.skillCooldown / 1000).toFixed(1)} 秒`
-      : "就緒";
+    if (player.id === 1) {
+      cooldownElement.textContent = player.skillRechargeTimer > 0
+        ? `${player.skillCharges}/${MAX_SKILL_CHARGES} · ${(player.skillRechargeTimer / 1000).toFixed(1)} 秒`
+        : `${player.skillCharges}/${MAX_SKILL_CHARGES}`;
+    } else {
+      cooldownElement.textContent = player.skillCooldown > 0
+        ? `${(player.skillCooldown / 1000).toFixed(1)} 秒`
+        : "就緒";
+    }
   });
   hookStatus.textContent = players[0].hookCooldown > 0
     ? `${(players[0].hookCooldown / 1000).toFixed(1)} 秒`
@@ -157,13 +170,6 @@ function updateHealthUI() {
         ? `${(players[1].healCooldown / 1000).toFixed(1)} 秒`
         : "就緒";
     }
-    if (players[0].ultimateCooldown > 0) {
-    skill1.textContent = `R ${(players[0].ultimateCooldown / 1000).toFixed(1)} 秒`;
-  } else if (players[0].skillCooldown > 0) {
-    skill1.textContent = `${(players[0].skillCooldown / 1000).toFixed(1)} 秒`;
-  } else {
-    skill1.textContent = "就緒";
-  }
 }
 
 function drawBackground() {
@@ -864,6 +870,15 @@ function updatePlayers() {
       }
     }
     player.skillCooldown = Math.max(0, player.skillCooldown - 16);
+    if (player.id === 1 && player.skillRechargeTimer > 0) {
+      player.skillRechargeTimer = Math.max(0, player.skillRechargeTimer - 16);
+      if (player.skillRechargeTimer === 0) {
+        player.skillCharges = Math.min(MAX_SKILL_CHARGES, player.skillCharges + 1);
+        if (player.skillCharges < MAX_SKILL_CHARGES) {
+          player.skillRechargeTimer = SKILL_COOLDOWN;
+        }
+      }
+    }
     player.hookCooldown = Math.max(0, player.hookCooldown - 16);
     if (player.healCooldown !== undefined) {
       player.healCooldown = Math.max(0, player.healCooldown - 16);
@@ -1211,6 +1226,18 @@ function drawHealthBars() {
     const percentage = `${Math.round((player.health / MAX_HEALTH) * 100)}%`;
     const textX = index === 0 ? left + barWidth + 8 : left - 8;
     ctx.fillText(percentage, textX, top + barHeight / 2);
+    if (player.id === 1) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(
+        player.ultimateCooldown > 0
+          ? `U 大招 ${(player.ultimateCooldown / 1000).toFixed(1)} 秒`
+          : "U 大招 就緒",
+        left,
+        top + barHeight + 14,
+      );
+    }
   });
 }
 
@@ -1265,9 +1292,10 @@ function attackPlayer(player) {
 }
 
 function useSkill(player) {
-  if (player.skillCooldown > 0 || player.health <= 0 || gameOver) return;
+  if (player.health <= 0 || gameOver) return;
 
   if (player.id === 1) {
+    if (player.skillCharges <= 0) return;
     const previousX = player.x;
     const previousY = player.y + PLAYER_HEIGHT / 2;
     const destinationX = Math.max(
@@ -1291,7 +1319,12 @@ function useSkill(player) {
     }
     spawnVoidMarker(previousX + PLAYER_WIDTH / 2, previousY);
     spawnImpact(destinationX + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#7a7cff", 18);
+    player.skillCharges -= 1;
+    if (player.skillRechargeTimer === 0) {
+      player.skillRechargeTimer = SKILL_COOLDOWN;
+    }
   } else {
+    if (player.skillCooldown > 0) return;
     const originX = player.x + PLAYER_WIDTH / 2;
     const originY = player.y + PLAYER_HEIGHT / 2;
     spawnFlameBurst(originX, originY, "#ff9745", 18);
@@ -1307,8 +1340,8 @@ function useSkill(player) {
         life: 2000,
       });
     }
+    player.skillCooldown = SKILL_COOLDOWN;
   }
-  player.skillCooldown = SKILL_COOLDOWN;
   updateHealthUI();
 }
 
