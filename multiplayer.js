@@ -3,12 +3,16 @@
   const $ = id => document.getElementById(id);
   const status = $('networkStatus');
   const actions = ['left', 'right', 'jump', 'attack', 'skill', 'extra', 'ultimate'];
+  const STATE_UPDATE_INTERVAL = 1000 / 20;
+  const MAX_BUFFERED_STATE_BYTES = 128 * 1024;
   let mode = 'local', peer = null, connection = null, generation = 0;
   let connected = false, lastSeen = 0, lastSend = 0, timeout;
   const held = new Set();
   const pointers = new Map();
-  function send(data) {
-    if (connection?.open) connection.send(data);
+  function send(data, isState = false) {
+    if (!connection?.open) return;
+    if (isState && connection.dataChannel?.bufferedAmount > MAX_BUFFERED_STATE_BYTES) return;
+    connection.send(data);
   }
   function controls(player, action) {
     return player.controls[action === 'extra' ? (player.id === 1 ? 'hook' : 'decoy') : action];
@@ -59,8 +63,38 @@
     ui();
   }
   function snapshot() {
-    return {type:'state', players:players.map(p => ({...p, attackHit:[...p.attackHit]})),
-      projectiles, hooks, decoys, effects, gameStarted, gameOver, screenShakeTimer, message:message.textContent};
+    const playerState = players.map(player => ({
+      id: player.id,
+      x: player.x,
+      y: player.y,
+      vx: player.vx,
+      vy: player.vy,
+      facing: player.facing,
+      health: player.health,
+      onGround: player.onGround,
+      jumpsRemaining: player.jumpsRemaining,
+      attackTimer: player.attackTimer,
+      hitFlash: player.hitFlash,
+      skillCooldown: player.skillCooldown,
+      hookCooldown: player.hookCooldown,
+      healCooldown: player.healCooldown,
+      decoyCooldown: player.decoyCooldown,
+      ultimateCooldown: player.ultimateCooldown,
+      ultimateState: player.ultimateState,
+      attackHit: [...player.attackHit],
+    }));
+    return {
+      type:'state',
+      players:playerState,
+      projectiles:projectiles.slice(-100),
+      hooks:hooks.slice(-20),
+      decoys:decoys.slice(-20),
+      effects:effects.slice(-180),
+      gameStarted,
+      gameOver,
+      screenShakeTimer,
+      message:message.textContent,
+    };
   }
   function receiveState(data) {
     if (!Array.isArray(data.players) || data.players.length !== 2) return;
@@ -90,7 +124,7 @@
       release(); keys.clear();
       status.textContent = mode === 'host' ? '已連線 · 你是玩家 1（紅色），可開始遊戲' : '已連線 · 你是玩家 2（藍色），等待房主開始';
       ui();
-      if (mode === 'host') send(snapshot());
+      if (mode === 'host') send(snapshot(), true);
     });
     conn.on('data', data => {
       if (token !== generation || !connected || !data || typeof data !== 'object') return;
@@ -136,7 +170,7 @@
     if (mode === 'guest' || (mode === 'host' && !connected)) return;
     if (gameStarted && !gameOver) return;
     release(); keys.clear(); resetGame();
-    if (mode === 'host') send(snapshot());
+    if (mode === 'host') send(snapshot(), true);
   }
   $('createRoom').onclick = () => begin(true);
   $('joinRoom').onclick = () => begin(false);
@@ -172,8 +206,10 @@
     tick(now) {
       if (!connected) return;
       if (now-lastSeen > 10000) { stop('連線中斷，對戰已停止。請重新連線。'); return; }
-      if (now-lastSend >= (mode === 'host' ? 1000/30 : 1000)) {
-        lastSend = now; send(mode === 'host' ? snapshot() : {type:'heartbeat'});
+      if (now-lastSend >= (mode === 'host' ? STATE_UPDATE_INTERVAL : 1000)) {
+        lastSend = now;
+        if (mode === 'host') send(snapshot(), true);
+        else send({type:'heartbeat'});
       }
     }
   };
