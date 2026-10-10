@@ -14,6 +14,14 @@
   const guestPositionBuffer = [];
   const networkIds = new WeakMap();
   let nextNetworkId = 0;
+  function controlKey(player, action) {
+    if (mode === 'guest' && player.id === 2) {
+      if (action === 'extra') return players[0].controls.hook;
+      if (action === 'heal') return players[0].controls.ultimate;
+      return players[0].controls[action];
+    }
+    return player.controls[action === 'extra' ? (player.id === 1 ? 'hook' : 'decoy') : action];
+  }
   function identifiedStates(entities) {
     return entities.map(entity => {
       let networkId = networkIds.get(entity);
@@ -30,7 +38,7 @@
     connection.send(data);
   }
   function controls(player, action) {
-    return player.controls[action === 'extra' ? (player.id === 1 ? 'hook' : 'decoy') : action];
+    return controlKey(player, action);
   }
   function apply(player, action, down) {
     if (!actions.includes(action)) return;
@@ -65,6 +73,8 @@
     document.querySelector('[data-action="skill"]').textContent = mode === 'guest' ? '波動拳' : '瞬移 (G)';
     document.querySelector('[data-action="heal"]').hidden = mode !== 'guest';
     document.querySelector('[data-action="extra"]').textContent = mode === 'guest' ? '隱分身' : '勾索 (Y)';
+    $('player2LocalControls').hidden = mode === 'guest';
+    $('player2OnlineControls').hidden = mode !== 'guest';
   }
   function stop(text = '已離開連線 · 單機模式') {
     generation++;
