@@ -18,6 +18,7 @@
   let selectionFirst = null;
   let onlineMatchStarted = false;
   let countdownEndsAt = 0, fightTextUntil = 0;
+  let lastCountdownSend = 0;
   function selectionTurn() {
     if (!selectionFirst || hostCharacterId !== null && guestCharacterId !== null) return null;
     if (hostCharacterId === null && guestCharacterId === null) return selectionFirst;
@@ -149,6 +150,7 @@
     selectionFirst = null;
     onlineMatchStarted = false;
     countdownEndsAt = fightTextUntil = 0;
+    lastCountdownSend = 0;
     guestPositionBuffer.length = 0;
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
@@ -195,12 +197,6 @@
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
         .slice(-MAX_SYNCED_EFFECTS)),
       gameStarted,
-      countdownMs: mode === 'host' && countdownEndsAt > 0
-        ? Math.max(0, countdownEndsAt - performance.now())
-        : 0,
-      fightTextMs: mode === 'host' && fightTextUntil > performance.now()
-        ? fightTextUntil - performance.now()
-        : 0,
       gameOver,
       matchScore,
       matchOver,
@@ -239,17 +235,6 @@
       if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
     }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
-    if (mode === 'guest') {
-      const now = performance.now();
-      const countdownMs = Number(data.countdownMs);
-      const fightTextMs = Number(data.fightTextMs);
-      countdownEndsAt = Number.isFinite(countdownMs) && countdownMs > 0
-        ? now + countdownMs
-        : 0;
-      fightTextUntil = countdownEndsAt === 0 && Number.isFinite(fightTextMs) && fightTextMs > 0
-        ? now + fightTextMs
-        : 0;
-    }
     if (Number.isInteger(data.hostCharacterId) && [1, 2].includes(data.hostCharacterId)) {
       hostCharacterId = data.hostCharacterId;
     }
@@ -318,6 +303,17 @@
       if (token !== generation || !connected || !data || typeof data !== 'object') return;
       lastSeen = performance.now();
       if (mode === 'guest' && data.type === 'state') receiveState(data);
+      if (mode === 'guest' && data.type === 'countdown') {
+        const now = performance.now();
+        const countdownMs = Number(data.countdownMs);
+        const fightTextMs = Number(data.fightTextMs);
+        countdownEndsAt = Number.isFinite(countdownMs) && countdownMs > 0
+          ? now + countdownMs
+          : 0;
+        fightTextUntil = countdownEndsAt === 0 && Number.isFinite(fightTextMs) && fightTextMs > 0
+          ? now + fightTextMs
+          : 0;
+      }
       if (mode === 'host' && data.type === 'pick' && !onlineMatchStarted &&
         Number.isInteger(data.characterId) && [1, 2].includes(data.characterId) &&
         selectionTurn() === 'guest' && data.characterId !== hostCharacterId) {
@@ -372,6 +368,8 @@
       startNextGame();
       countdownEndsAt = performance.now() + 3000;
       fightTextUntil = 0;
+      lastCountdownSend = 0;
+      send({type:'countdown', countdownMs:3000, fightTextMs:0});
     } else {
       startNextGame();
     }
@@ -444,7 +442,14 @@
       if (mode === 'host' && countdownEndsAt > 0 && countdownEndsAt <= now) {
         countdownEndsAt = 0;
         fightTextUntil = now + 700;
-        send(snapshot(), true);
+        send({type:'countdown', countdownMs:0, fightTextMs:700});
+      } else if (mode === 'host' && countdownEndsAt > now && now - lastCountdownSend >= 100) {
+        lastCountdownSend = now;
+        send({
+          type:'countdown',
+          countdownMs:countdownEndsAt - now,
+          fightTextMs:0,
+        });
       }
       interpolateGuestPositions(now);
       if (now-lastSend >= (mode === 'host' ? STATE_UPDATE_INTERVAL : 1000)) {
