@@ -17,6 +17,7 @@
   let hostCharacterId = null, guestCharacterId = null, guestPendingCharacterId = null;
   let selectionFirst = null;
   let onlineMatchStarted = false;
+  let countdownEndsAt = 0, fightTextUntil = 0;
   function selectionTurn() {
     if (!selectionFirst || hostCharacterId !== null && guestCharacterId !== null) return null;
     if (hostCharacterId === null && guestCharacterId === null) return selectionFirst;
@@ -66,7 +67,7 @@
     if (action === 'meteor' && player.id !== 2) return;
     const key = actionInputKey(player, action);
     if (!down) { keys.delete(key); return; }
-    if (!gameStarted || gameOver || keys.has(key)) return;
+    if (!gameStarted || gameOver || countdownEndsAt > performance.now() || keys.has(key)) return;
     keys.add(key);
     if (action === 'jump') jumpPlayer(player);
     if (action === 'attack') attackPlayer(player);
@@ -147,6 +148,7 @@
     hostCharacterId = guestCharacterId = guestPendingCharacterId = null;
     selectionFirst = null;
     onlineMatchStarted = false;
+    countdownEndsAt = fightTextUntil = 0;
     guestPositionBuffer.length = 0;
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
@@ -193,6 +195,12 @@
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
         .slice(-MAX_SYNCED_EFFECTS)),
       gameStarted,
+      countdownMs: mode === 'host' && countdownEndsAt > 0
+        ? Math.max(0, countdownEndsAt - performance.now())
+        : 0,
+      fightTextMs: mode === 'host' && fightTextUntil > performance.now()
+        ? fightTextUntil - performance.now()
+        : 0,
       gameOver,
       matchScore,
       matchOver,
@@ -231,6 +239,17 @@
       if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
     }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
+    if (mode === 'guest') {
+      const now = performance.now();
+      const countdownMs = Number(data.countdownMs);
+      const fightTextMs = Number(data.fightTextMs);
+      countdownEndsAt = Number.isFinite(countdownMs) && countdownMs > 0
+        ? now + countdownMs
+        : 0;
+      fightTextUntil = countdownEndsAt === 0 && Number.isFinite(fightTextMs) && fightTextMs > 0
+        ? now + fightTextMs
+        : 0;
+    }
     if (Number.isInteger(data.hostCharacterId) && [1, 2].includes(data.hostCharacterId)) {
       hostCharacterId = data.hostCharacterId;
     }
@@ -347,8 +366,15 @@
     if (mode === 'guest' || (mode === 'host' && (!connected || !hostCharacterId ||
       !guestCharacterId || hostCharacterId === guestCharacterId))) return;
     if (gameStarted && !gameOver) return;
-    if (mode === 'host') onlineMatchStarted = true;
-    release(); keys.clear(); startNextGame();
+    release(); keys.clear();
+    if (mode === 'host') {
+      onlineMatchStarted = true;
+      startNextGame();
+      countdownEndsAt = performance.now() + 3000;
+      fightTextUntil = 0;
+    } else {
+      startNextGame();
+    }
     ui();
     if (mode === 'host') send(snapshot(), true);
   }
@@ -391,7 +417,8 @@
     if (document.hidden && mode !== 'local') stop('頁面已切換至背景，對戰已停止。回來後請重新連線。');
   });
   window.duel = {
-    canSimulate: () => mode === 'local' || (mode === 'host' && connected),
+    canSimulate: () => mode === 'local' ||
+      (mode === 'host' && connected && countdownEndsAt <= performance.now()),
     controlKey,
     isActionDown(player, action) {
       return keys.has(actionInputKey(player, action));
@@ -405,9 +432,20 @@
       if (action) { event.preventDefault(); if (!event.repeat) input(action,down); }
       return true;
     },
+    countdownText() {
+      const now = performance.now();
+      if (countdownEndsAt > now) return String(Math.ceil((countdownEndsAt - now) / 1000));
+      if (fightTextUntil > now) return 'Fight!';
+      return null;
+    },
     tick(now) {
       if (!connected) return;
       if (now-lastSeen > 10000) { stop('連線中斷，對戰已停止。請重新連線。'); return; }
+      if (mode === 'host' && countdownEndsAt > 0 && countdownEndsAt <= now) {
+        countdownEndsAt = 0;
+        fightTextUntil = now + 700;
+        send(snapshot(), true);
+      }
       interpolateGuestPositions(now);
       if (now-lastSend >= (mode === 'host' ? STATE_UPDATE_INTERVAL : 1000)) {
         lastSend = now;
