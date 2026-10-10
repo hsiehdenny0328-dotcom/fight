@@ -303,8 +303,8 @@
         Number.isInteger(data.characterId) && [1, 2].includes(data.characterId) &&
         selectionTurn() === 'guest' && data.characterId !== hostCharacterId) {
         guestCharacterId = data.characterId;
-        send(snapshot(), true);
-        ui();
+        hostCharacterId = 3 - guestCharacterId;
+        start();
       }
       if (mode === 'host' && data.type === 'input' && typeof data.down === 'boolean' &&
         guestCharacterId !== null) apply(players[guestCharacterId - 1],data.action,data.down);
@@ -357,7 +357,8 @@
     if (mode === 'host') {
       if (characterId === guestCharacterId) return;
       hostCharacterId = characterId;
-      send(snapshot(), true);
+      guestCharacterId = 3 - characterId;
+      start();
     } else if (mode === 'guest' && characterId !== hostCharacterId) {
       guestPendingCharacterId = characterId;
       send({type:'pick', characterId});
