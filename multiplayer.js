@@ -12,6 +12,18 @@
   const held = new Set();
   const pointers = new Map();
   const guestPositionBuffer = [];
+  const networkIds = new WeakMap();
+  let nextNetworkId = 0;
+  function identifiedStates(entities) {
+    return entities.map(entity => {
+      let networkId = networkIds.get(entity);
+      if (networkId === undefined) {
+        networkId = ++nextNetworkId;
+        networkIds.set(entity, networkId);
+      }
+      return { ...entity, networkId };
+    });
+  }
   function send(data, isState = false) {
     if (!connection?.open) return;
     if (isState && connection.dataChannel?.bufferedAmount > MAX_BUFFERED_STATE_BYTES) return;
@@ -94,12 +106,12 @@
     return {
       type:'state',
       players:playerState,
-      projectiles:projectiles.slice(-100),
-      hooks:hooks.slice(-20),
-      decoys:decoys.slice(-20),
-      effects:effects
+      projectiles:identifiedStates(projectiles.slice(-100)),
+      hooks:identifiedStates(hooks.slice(-20)),
+      decoys:identifiedStates(decoys.slice(-20)),
+      effects:identifiedStates(effects
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
-        .slice(-MAX_SYNCED_EFFECTS),
+        .slice(-MAX_SYNCED_EFFECTS)),
       gameStarted,
       gameOver,
       screenShakeTimer,
@@ -117,17 +129,25 @@
       }
       p.attackHit = new Set(incoming.attackHit || []);
     });
-    if (mode === 'guest') {
-      guestPositionBuffer.push({
-        time: performance.now(),
-        players: players.map(({ x, y }) => ({ x, y })),
-      });
-      if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
-    }
     [projectiles,hooks,decoys,effects].forEach((list,i) => {
       const source = data[['projectiles','hooks','decoys','effects'][i]];
       if (Array.isArray(source)) list.splice(0,list.length,...source.slice(0,500));
     });
+    if (mode === 'guest') {
+      const entityPositions = [projectiles, hooks, decoys, effects].map(entities =>
+        entities.map((entity, index) => ({
+          networkId: entity.networkId ?? `index-${index}`,
+          x: entity.x,
+          y: entity.y,
+        })),
+      );
+      guestPositionBuffer.push({
+        time: performance.now(),
+        players: players.map(({ x, y }) => ({ x, y })),
+        entities: entityPositions,
+      });
+      if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
+    }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
     screenShakeTimer = Number(data.screenShakeTimer) || 0;
     message.textContent = String(data.message || '');
@@ -149,6 +169,15 @@
       const end = to.players[index];
       player.x = start.x + (end.x - start.x) * progress;
       player.y = start.y + (end.y - start.y) * progress;
+    });
+    [projectiles, hooks, decoys, effects].forEach((entities, listIndex) => {
+      const previous = new Map(from.entities[listIndex].map(entity => [entity.networkId, entity]));
+      entities.forEach((entity, index) => {
+        const start = previous.get(entity.networkId ?? `index-${index}`);
+        if (!start) return;
+        entity.x = start.x + (entity.x - start.x) * progress;
+        entity.y = start.y + (entity.y - start.y) * progress;
+      });
     });
   }
   function attach(conn, token) {
