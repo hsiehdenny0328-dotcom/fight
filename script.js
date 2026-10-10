@@ -1785,7 +1785,8 @@ function useDecoys(player) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
+  if (event.target && event.target.closest && event.target.closest('input, textarea, select') &&
+    document.getElementById("gameScreen").hidden) return;
   if (window.duel && window.duel.keyboard(event, true)) return;
   const key = event.key.toLowerCase();
   if (key.startsWith('arrow')) event.preventDefault();
