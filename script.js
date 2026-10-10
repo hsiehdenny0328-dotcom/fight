@@ -1405,6 +1405,20 @@ function drawHealthBars() {
         left,
         top + barHeight + 14,
       );
+    } else {
+      const meteorKey = window.duel
+        ? window.duel.controlKey(player, "meteor")
+        : player.controls.meteor;
+      ctx.fillStyle = "#fff";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(
+        player.meteorCooldown > 0
+          ? `${meteorKey} 隕石 ${(player.meteorCooldown / 1000).toFixed(1)} 秒`
+          : `${meteorKey} 隕石 就緒`,
+        left + barWidth,
+        top + barHeight + 14,
+      );
     }
   });
   const centerX = canvas.width / 2;
