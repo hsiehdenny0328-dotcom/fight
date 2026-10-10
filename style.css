@@ -116,6 +116,14 @@ canvas {
 }
 
 .lobby { display: grid; gap: 12px; margin-bottom: 16px; color: var(--text-muted); }
+.character-select { display: grid; gap: 12px; margin: 0 auto 16px; padding: 16px; max-width: 760px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255, 255, 255, 0.04); color: var(--text-muted); text-align: center; }
+.character-select h2 { color: var(--text); }
+.character-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.character-option { display: grid; gap: 8px; min-height: 88px; }
+.character-option strong { color: var(--text); font-size: 18px; }
+.character-option.selected { border-color: #8bd4ff; background: #355478; box-shadow: 0 0 0 2px rgba(139, 212, 255, 0.3); }
+.character-option.player1-option strong { color: #f46a6a; }
+.character-option.player2-option strong { color: #5ab4f5; }
 .room-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 button, input { font: inherit; border: 1px solid #536989; border-radius: 9px; padding: 12px; color: #eef2ff; background: #223653; }
 button { cursor: pointer; min-height: 48px; touch-action: manipulation; }
@@ -135,6 +143,7 @@ input { width: 155px; text-transform: uppercase; }
   .health-bars, .special-status { grid-template-columns: repeat(2, minmax(0, 1fr)); font-size: 13px; }
   .touch-controls { gap: 8px; }
   .touch-controls button { min-width: 48px; padding: 10px; }
+  .character-options { grid-template-columns: 1fr; }
 }
 @media (orientation: landscape) and (max-height: 600px) {
   body { padding: 6px; align-items: flex-start; }

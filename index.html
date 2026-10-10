@@ -17,10 +17,25 @@
       <p id="networkStatus" role="status" aria-live="polite">單機模式 · 可使用下方鍵盤操作</p>
       <button id="startGame">開始遊戲</button>
     </section>
+    <section id="characterSelect" class="character-select" aria-label="多人連線角色選擇" hidden>
+      <h2>選擇對戰角色</h2>
+      <p>系統會隨機決定先選方，雙方需依序選擇不同角色。</p>
+      <div class="character-options">
+        <button type="button" class="character-option player1-option" data-character="1">
+          <strong>玩家 1角色</strong>
+          <span>瞬間移動・勾索・幻影連斬</span>
+        </button>
+        <button type="button" class="character-option player2-option" data-character="2">
+          <strong>玩家 2角色</strong>
+          <span>波動拳・治療・隱分身・隕石衝擊</span>
+        </button>
+      </div>
+      <p id="characterSelectStatus" role="status" aria-live="polite">等待連線後隨機決定選角順序</p>
+    </section>
     <canvas id="gameCanvas" width="1100" height="520"></canvas>
     <div id="touchControls" class="touch-controls" aria-label="觸控操作">
       <div><button data-action="left" aria-label="向左">◀</button><button data-action="right" aria-label="向右">▶</button></div>
-      <div><button data-action="jump">跳躍</button><button data-action="attack">普攻</button><button data-action="skill">瞬移</button><button data-action="heal" hidden>治療</button><button data-action="extra">勾索</button><button data-action="meteor" hidden>隕石</button></div>
+      <div><button data-action="jump">跳躍</button><button data-action="attack">普攻</button><button data-action="skill">瞬移</button><button data-action="heal" hidden>治療</button><button data-action="extra">勾索</button><button data-action="ultimate">大招</button><button data-action="meteor" hidden>隕石</button></div>
     </div>
     <div class="status">
       <div id="message">按空白鍵開始遊戲</div>

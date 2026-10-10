@@ -14,14 +14,32 @@
   const guestPositionBuffer = [];
   const networkIds = new WeakMap();
   let nextNetworkId = 0;
-  function controlKey(player, action) {
-    if (mode === 'guest' && player.id === 2) {
-      if (action === 'extra') return players[0].controls.hook;
-      if (action === 'heal') return players[0].controls.ultimate;
-      if (action === 'meteor') return 'f';
-      return players[0].controls[action];
+  let hostCharacterId = null, guestCharacterId = null, guestPendingCharacterId = null;
+  let selectionFirst = null;
+  let onlineMatchStarted = false;
+  function selectionTurn() {
+    if (!selectionFirst || hostCharacterId !== null && guestCharacterId !== null) return null;
+    if (hostCharacterId === null && guestCharacterId === null) return selectionFirst;
+    return hostCharacterId === null ? 'host' : 'guest';
+  }
+  function localCharacterId() {
+    return mode === 'host' ? hostCharacterId : mode === 'guest'
+      ? guestPendingCharacterId || guestCharacterId
+      : 1;
+  }
+  function onlineControlKey(characterId, action) {
+    const character = players[characterId - 1];
+    const playerOne = players[0];
+    if (characterId === 1) {
+      return character.controls[action === 'extra' ? 'hook' : action];
     }
-    return player.controls[action === 'extra' ? (player.id === 1 ? 'hook' : 'decoy') : action];
+    if (action === 'extra') return playerOne.controls.hook;
+    if (action === 'heal') return playerOne.controls.ultimate;
+    if (action === 'meteor') return 'f';
+    return playerOne.controls[action];
+  }
+  function controlKey(player, action) {
+    return onlineControlKey(player.id, action);
   }
   function identifiedStates(entities) {
     return entities.map(entity => {
@@ -44,6 +62,8 @@
   function apply(player, action, down) {
     if (!actions.includes(action)) return;
     if (action === 'ultimate' && player.id !== 1) return;
+    if (action === 'heal' && player.id !== 2) return;
+    if (action === 'meteor' && player.id !== 2) return;
     const key = controls(player, action);
     if (!down) { keys.delete(key); return; }
     if (!gameStarted || gameOver || keys.has(key)) return;
@@ -57,10 +77,14 @@
     if (action === 'meteor') useMeteorStrike(player);
   }
   function input(action, down) {
+    if (mode === 'host' && !localCharacterId()) return;
     if (down === held.has(action)) return;
     if (down) held.add(action); else held.delete(action);
     if (mode === 'guest') { if (connected) send({type:'input', action, down}); }
-    else if (mode === 'local' || connected) apply(players[0], action, down);
+    else if (mode === 'local' || connected) {
+      const playerId = mode === 'local' ? 1 : localCharacterId();
+      apply(players[playerId - 1], action, down);
+    }
   }
   function release() {
     for (const action of [...held]) input(action, false);
@@ -71,15 +95,46 @@
     $('leaveRoom').hidden = mode === 'local';
     $('createRoom').disabled = $('joinRoom').disabled = mode !== 'local';
     $('roomCode').readOnly = mode !== 'local';
-    $('startGame').disabled = mode !== 'local' && (!connected || mode === 'guest');
-    document.querySelector('[data-action="skill"]').textContent = mode === 'guest' ? '波動拳' : '瞬移 (G)';
-    document.querySelector('[data-action="heal"]').hidden = mode !== 'guest';
-    document.querySelector('[data-action="extra"]').textContent = mode === 'guest' ? '隱分身' : '勾索 (Y)';
-    document.querySelector('[data-action="meteor"]').hidden = mode !== 'guest';
+    const localId = localCharacterId();
+    const localPlayer = localId ? players[localId - 1] : null;
+    const selectionReady = mode === 'local' || (hostCharacterId !== null && guestCharacterId !== null &&
+      hostCharacterId !== guestCharacterId);
+    $('startGame').disabled = mode !== 'local' && (!connected || mode === 'guest' || !selectionReady);
+    $('characterSelect').hidden = mode === 'local' || !connected || onlineMatchStarted;
+    $('touchControls').hidden = mode !== 'local' && !gameStarted;
+    const turn = selectionTurn();
+    $('characterSelectStatus').textContent = !selectionFirst
+      ? '等待隨機決定選角順序'
+      : hostCharacterId !== null && guestCharacterId !== null
+        ? `角色已選定：玩家 ${hostCharacterId} 由房主操作，玩家 ${guestCharacterId} 由加入者操作`
+        : turn === 'host'
+          ? hostCharacterId === null && guestCharacterId === null
+            ? '隨機結果：房主先選角'
+            : '房主請選擇尚未被選取的角色'
+          : turn === 'guest'
+            ? hostCharacterId === null && guestCharacterId === null
+              ? '隨機結果：加入者先選角'
+              : '加入者請選擇尚未被選取的角色'
+            : '等待對方完成選角';
+    document.querySelectorAll('[data-character]').forEach(button => {
+      const characterId = Number(button.dataset.character);
+      const ownId = mode === 'host' ? hostCharacterId : guestPendingCharacterId || guestCharacterId;
+      const otherId = mode === 'host' ? guestCharacterId : hostCharacterId;
+      button.classList.toggle('selected', ownId === characterId);
+      button.disabled = !connected || onlineMatchStarted || turn !== mode ||
+        (mode === 'guest' && guestPendingCharacterId !== null) ||
+        (otherId === characterId && ownId !== characterId);
+    });
+    document.querySelector('[data-action="skill"]').textContent = localPlayer?.id === 2 ? '波動拳 (G)' : '瞬移 (G)';
+    document.querySelector('[data-action="heal"]').hidden = localPlayer?.id !== 2;
+    document.querySelector('[data-action="extra"]').textContent = localPlayer?.id === 2 ? '隱分身 (Y)' : '勾索 (Y)';
+    document.querySelector('[data-action="meteor"]').hidden = localPlayer?.id !== 2;
     document.querySelector('[data-action="meteor"]').textContent = '隕石 (F)';
-    $('meteorKeyLabel').textContent = mode === 'guest' ? 'F' : '7';
-    $('player2LocalControls').hidden = mode === 'guest';
-    $('player2OnlineControls').hidden = mode !== 'guest';
+    document.querySelector('[data-action="ultimate"]').hidden = localPlayer?.id !== 1;
+    document.querySelector('[data-action="ultimate"]').textContent = '大招 (U)';
+    $('meteorKeyLabel').textContent = mode === 'guest' ? 'F' : mode === 'host' ? 'F' : '7';
+    $('player2LocalControls').hidden = mode !== 'local';
+    $('player2OnlineControls').hidden = mode === 'local';
   }
   function stop(text = '已離開連線 · 單機模式') {
     generation++;
@@ -89,6 +144,9 @@
     connection?.close(); peer?.destroy();
     peer = connection = null;
     mode = 'local';
+    hostCharacterId = guestCharacterId = guestPendingCharacterId = null;
+    selectionFirst = null;
+    onlineMatchStarted = false;
     guestPositionBuffer.length = 0;
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
@@ -121,6 +179,10 @@
     }));
     return {
       type:'state',
+      selectionFirst,
+      hostCharacterId,
+      guestCharacterId,
+      onlineMatchStarted,
       players:playerState,
       projectiles:identifiedStates(projectiles.slice(-100)),
       hooks:identifiedStates(hooks.slice(-20)),
@@ -169,6 +231,19 @@
       if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
     }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
+    if (Number.isInteger(data.hostCharacterId) && [1, 2].includes(data.hostCharacterId)) {
+      hostCharacterId = data.hostCharacterId;
+    }
+    if (Number.isInteger(data.guestCharacterId) && [1, 2].includes(data.guestCharacterId)) {
+      guestCharacterId = data.guestCharacterId;
+      if (guestPendingCharacterId === guestCharacterId) guestPendingCharacterId = null;
+    } else {
+      guestCharacterId = null;
+    }
+    if (data.selectionFirst === 'host' || data.selectionFirst === 'guest') {
+      selectionFirst = data.selectionFirst;
+    }
+    onlineMatchStarted = !!data.onlineMatchStarted;
     if (Array.isArray(data.matchScore) && data.matchScore.length === 2 &&
       data.matchScore.every(score => Number.isInteger(score) && score >= 0)) {
       matchScore = data.matchScore;
@@ -177,6 +252,7 @@
     screenShakeTimer = Number(data.screenShakeTimer) || 0;
     message.textContent = String(data.message || '');
     updateHealthUI();
+    ui();
   }
   function interpolateGuestPositions(now) {
     if (mode !== 'guest' || guestPositionBuffer.length < 2) return;
@@ -214,7 +290,8 @@
       if (token !== generation) return;
       clearTimeout(timeout); connected = true; lastSeen = performance.now();
       release(); keys.clear();
-      status.textContent = mode === 'host' ? '已連線 · 你是玩家 1（紅色），可開始遊戲' : '已連線 · 你是玩家 2（藍色），等待房主開始';
+      if (mode === 'host') selectionFirst = Math.random() < 0.5 ? 'host' : 'guest';
+      status.textContent = '已連線 · 隨機決定選角順序';
       ui();
       if (mode === 'host') send(snapshot(), true);
     });
@@ -222,7 +299,15 @@
       if (token !== generation || !connected || !data || typeof data !== 'object') return;
       lastSeen = performance.now();
       if (mode === 'guest' && data.type === 'state') receiveState(data);
-      if (mode === 'host' && data.type === 'input' && typeof data.down === 'boolean') apply(players[1],data.action,data.down);
+      if (mode === 'host' && data.type === 'pick' && !onlineMatchStarted &&
+        Number.isInteger(data.characterId) && [1, 2].includes(data.characterId) &&
+        selectionTurn() === 'guest' && data.characterId !== hostCharacterId) {
+        guestCharacterId = data.characterId;
+        send(snapshot(), true);
+        ui();
+      }
+      if (mode === 'host' && data.type === 'input' && typeof data.down === 'boolean' &&
+        guestCharacterId !== null) apply(players[guestCharacterId - 1],data.action,data.down);
     });
     conn.on('close', () => { if (token === generation) stop('對方已離線，對戰已停止。請重新建立或加入房間。'); });
     conn.on('error', () => { if (token === generation) stop('對戰連線失敗，請重新建立房間。'); });
@@ -243,7 +328,7 @@
       if (token !== generation) return;
       if (host) {
         clearTimeout(timeout);
-        status.textContent = `房號 ${room} · 你是玩家 1，等待另一支手機加入`;
+        status.textContent = `房號 ${room} · 等待另一支手機加入`;
       } else attach(peer.connect('fight-v1-'+room, {reliable:true, serialization:'json'}),token);
     });
     peer.on('connection', conn => {
@@ -259,15 +344,34 @@
     peer.on('disconnected', () => { if (token === generation && !connected) stop('房間服務已斷線，請重新建立或加入。'); });
   }
   function start() {
-    if (mode === 'guest' || (mode === 'host' && !connected)) return;
+    if (mode === 'guest' || (mode === 'host' && (!connected || !hostCharacterId ||
+      !guestCharacterId || hostCharacterId === guestCharacterId))) return;
     if (gameStarted && !gameOver) return;
+    if (mode === 'host') onlineMatchStarted = true;
     release(); keys.clear(); startNextGame();
+    ui();
     if (mode === 'host') send(snapshot(), true);
+  }
+  function chooseCharacter(characterId) {
+    if (!connected || onlineMatchStarted || selectionTurn() !== mode || ![1, 2].includes(characterId)) return;
+    if (mode === 'host') {
+      if (characterId === guestCharacterId) return;
+      hostCharacterId = characterId;
+      send(snapshot(), true);
+    } else if (mode === 'guest' && characterId !== hostCharacterId) {
+      guestPendingCharacterId = characterId;
+      send({type:'pick', characterId});
+      status.textContent = '已送出角色選擇，等待確認';
+    }
+    ui();
   }
   $('createRoom').onclick = () => begin(true);
   $('joinRoom').onclick = () => begin(false);
   $('leaveRoom').onclick = () => stop();
   $('startGame').onclick = start;
+  document.querySelectorAll('[data-character]').forEach(button => {
+    button.addEventListener('click', () => chooseCharacter(Number(button.dataset.character)));
+  });
   document.querySelectorAll('[data-action]').forEach(button => {
     button.addEventListener('pointerdown', event => {
       event.preventDefault(); button.setPointerCapture(event.pointerId);
@@ -291,7 +395,8 @@
       if (mode === 'local') return false;
       if (event.code === 'Space') { event.preventDefault(); if (down && !event.repeat) start(); return true; }
       const key = event.key.toLowerCase();
-      const action = actions.find(a => controls(players[mode === 'guest' ? 1 : 0],a) === key);
+      const characterId = localCharacterId();
+      const action = characterId && actions.find(a => onlineControlKey(characterId,a) === key);
       if (action) { event.preventDefault(); if (!event.repeat) input(action,down); }
       return true;
     },
