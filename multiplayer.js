@@ -106,7 +106,7 @@
     if (mode !== 'guest') keys.clear();
   }
   function ui() {
-    $('leaveRoom').hidden = mode === 'local';
+    $('gameNetworkStatus').textContent = status.textContent;
     $('createRoom').disabled = $('joinRoom').disabled = mode !== 'local';
     $('roomCode').readOnly = mode !== 'local';
     const localId = localCharacterId();
@@ -114,6 +114,8 @@
     const selectionReady = mode === 'local' || (hostCharacterId !== null && guestCharacterId !== null &&
       hostCharacterId !== guestCharacterId);
     $('startGame').disabled = mode !== 'local' && (!connected || mode === 'guest' || !selectionReady);
+    $('startGame').hidden = mode === 'guest' || !gameOver;
+    $('startGame').textContent = gameOver ? '重新開始' : '開始遊戲';
     $('characterSelect').hidden = mode === 'local' || !connected || onlineMatchStarted;
     $('touchControls').hidden = mode !== 'local' && !gameStarted;
     const turn = selectionTurn();
@@ -147,8 +149,6 @@
     document.querySelector('[data-action="ultimate"]').hidden = localPlayer?.id !== 1;
     document.querySelector('[data-action="ultimate"]').textContent = '大招 (U)';
     $('meteorKeyLabel').textContent = mode === 'guest' ? 'F' : mode === 'host' ? 'F' : '7';
-    $('player2LocalControls').hidden = mode !== 'local';
-    $('player2OnlineControls').hidden = mode === 'local';
   }
   function stop(text = '已離開連線 · 單機模式') {
     generation++;
@@ -167,7 +167,32 @@
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
     status.textContent = text;
+    $('menuScreen').hidden = false;
+    $('gameScreen').hidden = true;
     ui();
+  }
+  function enterLocalGame() {
+    if (mode !== 'local') stop();
+    release();
+    keys.clear();
+    startNextGame();
+    $('menuScreen').hidden = true;
+    $('gameScreen').hidden = false;
+    status.textContent = '單人模式';
+    ui();
+  }
+  function returnToMenu() {
+    if (mode !== 'local') {
+      stop();
+      $('onlinePanel').hidden = true;
+      return;
+    }
+    release();
+    keys.clear();
+    gameStarted = false;
+    message.textContent = '選擇遊戲模式開始對戰';
+    $('gameScreen').hidden = true;
+    $('menuScreen').hidden = false;
   }
   function snapshot() {
     const playerState = players.map(player => ({
@@ -315,6 +340,8 @@
       release(); keys.clear();
       if (mode === 'host') selectionFirst = Math.random() < 0.5 ? 'host' : 'guest';
       status.textContent = '已連線 · 隨機決定選角順序';
+      $('menuScreen').hidden = true;
+      $('gameScreen').hidden = false;
       ui();
       if (mode === 'host') send(snapshot(), true);
     });
@@ -401,8 +428,14 @@
   }
   $('createRoom').onclick = () => begin(true);
   $('joinRoom').onclick = () => begin(false);
-  $('leaveRoom').onclick = () => stop();
   $('startGame').onclick = start;
+  $('singlePlayer').onclick = enterLocalGame;
+  $('onlineMode').onclick = () => { $('onlinePanel').hidden = false; };
+  $('backToModes').onclick = () => {
+    if (mode !== 'local') stop('連線已取消，請重新選擇模式。');
+    $('onlinePanel').hidden = true;
+  };
+  $('returnToMenu').onclick = returnToMenu;
   document.querySelectorAll('[data-character]').forEach(button => {
     button.addEventListener('click', () => chooseCharacter(Number(button.dataset.character)));
   });
@@ -431,7 +464,13 @@
       return keys.has(actionInputKey(player, action));
     },
     keyboard(event,down) {
-      if (mode === 'local') return false;
+      if (mode === 'local') {
+        if ($('gameScreen').hidden) {
+          if (event.code === 'Space') event.preventDefault();
+          return true;
+        }
+        return false;
+      }
       if (event.code === 'Space') { event.preventDefault(); if (down && !event.repeat) start(); return true; }
       const key = event.key.toLowerCase();
       const characterId = localCharacterId();
@@ -445,6 +484,7 @@
       if (fightTextUntil > now) return 'Fight!';
       return null;
     },
+    refreshUi: ui,
     tick(now) {
       if (!connected) return;
       if (now-lastSeen > 10000) { stop('連線中斷，對戰已停止。請重新連線。'); return; }

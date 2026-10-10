@@ -8,61 +8,98 @@
 </head>
 <body>
   <div class="app-container">
-    <h1>雙人決鬥</h1>
-    <section class="lobby" aria-label="手機連線對戰">
-      <p>兩支手機開啟此頁，一人建立房間，另一人輸入房號加入。建議橫向遊玩。</p>
-      <div class="room-actions"><button id="createRoom">建立房間</button>
-      <label>房號 <input id="roomCode" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="8 碼房號"></label>
-      <button id="joinRoom">加入房間</button><button id="leaveRoom" hidden>離開連線</button></div>
-      <p id="networkStatus" role="status" aria-live="polite">單機模式 · 可使用下方鍵盤操作</p>
-      <button id="startGame">開始遊戲</button>
-    </section>
-    <section id="characterSelect" class="character-select" aria-label="多人連線角色選擇" hidden>
-      <h2>選擇對戰角色</h2>
-      <p>系統會隨機決定先選方；一方選定後，另一方會自動使用剩餘角色並立即開始對局。</p>
-      <div class="character-options">
-        <button type="button" class="character-option player1-option" data-character="1">
-          <strong>玩家 1角色</strong>
-          <span>瞬間移動・勾索・幻影連斬</span>
-        </button>
-        <button type="button" class="character-option player2-option" data-character="2">
-          <strong>玩家 2角色</strong>
-          <span>波動拳・治療・隱分身・隕石衝擊</span>
-        </button>
+    <main id="menuScreen" class="menu-screen">
+      <canvas id="menuBackground" class="menu-background" width="1100" height="520" aria-hidden="true"></canvas>
+      <header class="menu-heading">
+        <p class="eyebrow">DUEL ARENA</p>
+        <h1>雙人決鬥</h1>
+        <p>選擇模式，準備迎戰。</p>
+      </header>
+      <div class="menu-content">
+        <section class="mode-panel" aria-label="選擇遊戲模式">
+          <h2>選擇遊戲模式</h2>
+          <button id="singlePlayer" class="mode-button">
+            <strong>單人模式</strong>
+            <span>在同一個裝置上進行對戰</span>
+          </button>
+          <button id="onlineMode" class="mode-button">
+            <strong>連線模式</strong>
+            <span>與另一位玩家線上對戰</span>
+          </button>
+          <div id="onlinePanel" class="online-panel" hidden>
+            <p>建立新房間，或輸入對方提供的 8 碼房號。</p>
+            <button id="createRoom">建立房間</button>
+            <label for="roomCode">房號</label>
+            <div class="room-actions">
+              <input id="roomCode" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="輸入 8 碼房號">
+              <button id="joinRoom">加入房間</button>
+            </div>
+            <p id="networkStatus" role="status" aria-live="polite">選擇建立房間或加入房間</p>
+            <button id="backToModes" class="text-button">返回模式選擇</button>
+          </div>
+        </section>
+        <section class="tutorial-panel" aria-label="技能教學">
+          <h2>技能教學</h2>
+          <article>
+            <h3 class="player1">玩家 1｜瞬步劍士</h3>
+            <p>移動 A / D、跳躍 W、普攻 S、瞬間移動 G、勾索 Y、大招 U。</p>
+          </article>
+          <article>
+            <h3 class="player2">玩家 2｜念力鬥士</h3>
+            <p>單機：移動 ← / →、跳躍 ↑、普攻 ↓、波動拳 .、治療 5、隱分身 /、隕石 7。</p>
+            <p>連線：移動 A / D、跳躍 W、普攻 S、波動拳 G、隱分身 Y、治療 U、隕石 F。</p>
+          </article>
+          <p class="tutorial-tip">雙方生命值歸零前擊倒對手；連線對戰為三戰兩勝。</p>
+        </section>
       </div>
-      <p id="characterSelectStatus" role="status" aria-live="polite">等待連線後隨機決定選角順序</p>
-    </section>
-    <div class="game-stage">
-      <canvas id="gameCanvas" width="1100" height="520"></canvas>
-      <div id="countdownOverlay" class="countdown-overlay" role="status" aria-live="assertive" hidden></div>
-    </div>
-    <div id="touchControls" class="touch-controls" aria-label="觸控操作">
-      <div><button data-action="left" aria-label="向左">◀</button><button data-action="right" aria-label="向右">▶</button></div>
-      <div><button data-action="jump">跳躍</button><button data-action="attack">普攻</button><button data-action="skill">瞬移</button><button data-action="heal" hidden>治療</button><button data-action="extra">勾索</button><button data-action="ultimate">大招</button><button data-action="meteor" hidden>隕石</button></div>
-    </div>
-    <div class="status">
-      <div id="message">按空白鍵開始遊戲</div>
-      <div class="health-bars">
-        <div><span class="player-label player1">玩家 1</span> <span id="health1">200</span> / 200</div>
-        <div>
-          <div><span class="player-label player2">玩家 2</span> <span id="health2">200</span> / 200</div>
-          <div><span class="player-label player2">隕石衝擊 (<span id="meteorKeyLabel">7</span>)</span> <span id="meteorStatus">就緒</span></div>
+    </main>
+    <main id="gameScreen" class="game-screen" hidden>
+      <header class="game-header">
+        <button id="returnToMenu" class="text-button">返回主選單</button>
+        <p id="gameNetworkStatus" role="status" aria-live="polite">單人模式</p>
+        <button id="startGame">重新開始</button>
+      </header>
+      <section id="characterSelect" class="character-select" aria-label="多人連線角色選擇" hidden>
+        <h2>選擇對戰角色</h2>
+        <p>系統會隨機決定先選方；一方選定後，另一方會自動使用剩餘角色。</p>
+        <div class="character-options">
+          <button type="button" class="character-option player1-option" data-character="1">
+            <strong>玩家 1角色</strong>
+            <span>瞬間移動・勾索・幻影連斬</span>
+          </button>
+          <button type="button" class="character-option player2-option" data-character="2">
+            <strong>玩家 2角色</strong>
+            <span>波動拳・治療・隱分身・隕石衝擊</span>
+          </button>
         </div>
+        <p id="characterSelectStatus" role="status" aria-live="polite">等待連線後隨機決定選角順序</p>
+      </section>
+      <div class="game-stage">
+        <canvas id="gameCanvas" width="1100" height="520"></canvas>
+        <div id="countdownOverlay" class="countdown-overlay" role="status" aria-live="assertive" hidden></div>
       </div>
-      <div class="special-status">
-        <div><span class="player-label player1">玩家 1 瞬間移動 (G)</span> <span id="skill1">3/3</span></div>
-        <div><span class="player-label player2">玩家 2 波動拳</span> <span id="skill2">就緒</span></div>
-        <div><span class="player-label player2">玩家 2 治療</span> <span id="healStatus">就緒</span></div>
-        <div><span class="player-label player1">玩家 1 勾索 (Y)</span> <span id="hookStatus">就緒</span></div>
-        <div><span class="player-label player2">玩家 2 隱分身</span> <span id="decoyStatus">就緒</span></div>
-      </div>
-    </div>
-    <div class="controls">
-      <div>
-        <strong>玩家 1</strong><br />移動: A / D，雙連跳: W<br />普攻: S，瞬間移動: G，勾索: Y，大招: U
-      </div>
-      <div>
-        <strong>玩家 2</strong><br /><span id="player2LocalControls">移動: ← / →，雙連跳: ↑<br />普攻: ↓，波動拳: .，治療: 5，隱分身: /，隕石衝擊: 7</span><span id="player2OnlineControls" hidden>移動: A / D，雙連跳: W<br />普攻: S，波動拳: G，隱分身: Y，治療: U，隕石衝擊: F</span>
+      <div class="game-hud">
+        <div id="touchControls" class="touch-controls" aria-label="觸控操作">
+          <div><button data-action="left" aria-label="向左">◀</button><button data-action="right" aria-label="向右">▶</button></div>
+          <div><button data-action="jump">跳躍</button><button data-action="attack">普攻</button><button data-action="skill">瞬移</button><button data-action="heal" hidden>治療</button><button data-action="extra">勾索</button><button data-action="ultimate">大招</button><button data-action="meteor" hidden>隕石</button></div>
+        </div>
+        <div class="status">
+          <div id="message">按空白鍵開始遊戲</div>
+          <div class="health-bars">
+            <div><span class="player-label player1">玩家 1</span> <span id="health1">200</span> / 200</div>
+            <div>
+              <div><span class="player-label player2">玩家 2</span> <span id="health2">200</span> / 200</div>
+              <div><span class="player-label player2">隕石衝擊 (<span id="meteorKeyLabel">7</span>)</span> <span id="meteorStatus">就緒</span></div>
+            </div>
+          </div>
+          <div class="special-status">
+            <div><span class="player-label player1">玩家 1 瞬間移動 (G)</span> <span id="skill1">3/3</span></div>
+            <div><span class="player-label player2">玩家 2 波動拳</span> <span id="skill2">就緒</span></div>
+            <div><span class="player-label player2">玩家 2 治療</span> <span id="healStatus">就緒</span></div>
+            <div><span class="player-label player1">玩家 1 勾索 (Y)</span> <span id="hookStatus">就緒</span></div>
+            <div><span class="player-label player2">玩家 2 隱分身</span> <span id="decoyStatus">就緒</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

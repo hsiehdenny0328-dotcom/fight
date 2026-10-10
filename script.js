@@ -202,7 +202,9 @@ function updateHealthUI() {
     }
 }
 
-function drawBackground() {
+function drawBackground(targetContext = ctx, targetCanvas = canvas) {
+  const ctx = targetContext;
+  const canvas = targetCanvas;
   const skyGradient = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
   skyGradient.addColorStop(0, "#5a402c");
   skyGradient.addColorStop(0.38, "#9d7b4c");
@@ -334,6 +336,14 @@ function drawBackground() {
 
   ctx.fillStyle = "rgba(73, 51, 29, 0.45)";
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+}
+
+function drawMenuBackground() {
+  const backgroundCanvas = document.getElementById("menuBackground");
+  if (!backgroundCanvas) return;
+  const backgroundContext = backgroundCanvas.getContext("2d");
+  if (!backgroundContext) return;
+  drawBackground(backgroundContext, backgroundCanvas);
 }
 
 function drawPlayer(player) {
@@ -1371,6 +1381,7 @@ function checkGameOver() {
     } else {
       message.textContent = `本局平手，比分維持 ${matchScore[0]} : ${matchScore[1]}。請重賽。`;
     }
+    window.duel?.refreshUi();
   }
 }
 
@@ -1806,4 +1817,5 @@ window.addEventListener("keyup", (event) => {
 resetGame();
 gameStarted = false;
 message.textContent = "按空白鍵開始遊戲";
+drawMenuBackground();
 requestAnimationFrame(gameLoop);
