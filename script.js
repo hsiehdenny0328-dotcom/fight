@@ -909,10 +909,12 @@ function rectsOverlap(a, b) {
 
 function updatePlayers() {
   players.forEach((player) => {
-    const left = window.duel ? window.duel.controlKey(player, "left") : player.controls.left;
-    const right = window.duel ? window.duel.controlKey(player, "right") : player.controls.right;
-    const moveLeft = keys.has(left);
-    const moveRight = keys.has(right);
+    const moveLeft = window.duel
+      ? window.duel.isActionDown(player, "left")
+      : keys.has(player.controls.left);
+    const moveRight = window.duel
+      ? window.duel.isActionDown(player, "right")
+      : keys.has(player.controls.right);
     if (moveLeft) {
       player.vx -= player.onGround ? 1.2 : 0.8;
       player.facing = -1;

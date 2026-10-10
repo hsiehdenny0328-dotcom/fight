@@ -41,6 +41,9 @@
   function controlKey(player, action) {
     return mode === 'local' ? player.controls[action] : onlineControlKey(player.id, action);
   }
+  function actionInputKey(player, action) {
+    return mode === 'local' ? controlKey(player, action) : `online:${player.id}:${action}`;
+  }
   function identifiedStates(entities) {
     return entities.map(entity => {
       let networkId = networkIds.get(entity);
@@ -56,15 +59,12 @@
     if (isState && connection.dataChannel?.bufferedAmount > MAX_BUFFERED_STATE_BYTES) return;
     connection.send(data);
   }
-  function controls(player, action) {
-    return controlKey(player, action);
-  }
   function apply(player, action, down) {
     if (!actions.includes(action)) return;
     if (action === 'ultimate' && player.id !== 1) return;
     if (action === 'heal' && player.id !== 2) return;
     if (action === 'meteor' && player.id !== 2) return;
-    const key = controls(player, action);
+    const key = actionInputKey(player, action);
     if (!down) { keys.delete(key); return; }
     if (!gameStarted || gameOver || keys.has(key)) return;
     keys.add(key);
@@ -393,6 +393,9 @@
   window.duel = {
     canSimulate: () => mode === 'local' || (mode === 'host' && connected),
     controlKey,
+    isActionDown(player, action) {
+      return keys.has(actionInputKey(player, action));
+    },
     keyboard(event,down) {
       if (mode === 'local') return false;
       if (event.code === 'Space') { event.preventDefault(); if (down && !event.repeat) start(); return true; }
