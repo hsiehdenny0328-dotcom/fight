@@ -171,12 +171,15 @@
       player.y = start.y + (end.y - start.y) * progress;
     });
     [projectiles, hooks, decoys, effects].forEach((entities, listIndex) => {
-      const previous = new Map(from.entities[listIndex].map(entity => [entity.networkId, entity]));
+      const startPositions = new Map(from.entities[listIndex].map(entity => [entity.networkId, entity]));
+      const endPositions = new Map(to.entities[listIndex].map(entity => [entity.networkId, entity]));
       entities.forEach((entity, index) => {
-        const start = previous.get(entity.networkId ?? `index-${index}`);
-        if (!start) return;
-        entity.x = start.x + (entity.x - start.x) * progress;
-        entity.y = start.y + (entity.y - start.y) * progress;
+        const networkId = entity.networkId ?? `index-${index}`;
+        const start = startPositions.get(networkId);
+        const end = endPositions.get(networkId);
+        if (!start || !end) return;
+        entity.x = start.x + (end.x - start.x) * progress;
+        entity.y = start.y + (end.y - start.y) * progress;
       });
     });
   }
