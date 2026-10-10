@@ -9,6 +9,7 @@
   const MAX_SYNCED_EFFECTS = 32;
   let mode = 'local', peer = null, connection = null, generation = 0;
   let connected = false, lastSeen = 0, lastSend = 0, timeout;
+  let lastMovementStateSend = 0;
   const held = new Set();
   const pointers = new Map();
   const guestPositionBuffer = [];
@@ -88,7 +89,9 @@
     if (action === 'meteor' && player.id !== 2) return;
     const key = actionInputKey(player, action);
     if (!down) { keys.delete(key); return; }
-    if (!gameStarted || gameOver || countdownEndsAt > performance.now() || keys.has(key)) return;
+    if (!gameStarted || gameOver ||
+      (countdownEndsAt > performance.now() && action !== 'left' && action !== 'right') ||
+      keys.has(key)) return;
     keys.add(key);
     if (action === 'jump') jumpPlayer(player);
     if (action === 'attack') attackPlayer(player);
@@ -98,11 +101,22 @@
     if (action === 'ultimate') useUltimate(player);
     if (action === 'meteor') useMeteorStrike(player);
   }
+  function sendGuestMovementState(now = performance.now()) {
+    send({
+      type:'movementState',
+      left:held.has('left'),
+      right:held.has('right'),
+    });
+    lastMovementStateSend = now;
+  }
   function input(action, down) {
     if (mode === 'host' && !localCharacterId()) return;
     if (down === held.has(action)) return;
     if (down) held.add(action); else held.delete(action);
-    if (mode === 'guest') { if (connected) send({type:'input', action, down}); }
+    if (mode === 'guest' && connected) {
+      if (action === 'left' || action === 'right') sendGuestMovementState();
+      else send({type:'input', action, down});
+    }
     else if (mode === 'local' || connected) {
       const playerId = mode === 'local' ? 1 : localCharacterId();
       apply(players[playerId - 1], action, down);
@@ -171,6 +185,7 @@
     onlineMatchStarted = false;
     countdownEndsAt = fightTextUntil = 0;
     lastCountdownSend = 0;
+    lastMovementStateSend = 0;
     guestPositionBuffer.length = 0;
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
@@ -357,6 +372,16 @@
       lastSeen = performance.now();
       if (mode === 'guest' && data.type === 'state') receiveState(data);
       if (mode === 'guest' && data.type === 'countdown') syncCountdown(data);
+      if (mode === 'host' && data.type === 'movementState' &&
+        typeof data.left === 'boolean' && typeof data.right === 'boolean' &&
+        guestCharacterId !== null) {
+        const player = players[guestCharacterId - 1];
+        for (const [action, down] of [['left', data.left], ['right', data.right]]) {
+          const key = actionInputKey(player, action);
+          if (down && gameStarted && !gameOver) keys.add(key);
+          else keys.delete(key);
+        }
+      }
       if (mode === 'host' && data.type === 'pick' && !onlineMatchStarted &&
         Number.isInteger(data.characterId) && [1, 2].includes(data.characterId) &&
         selectionTurn() === 'guest' && data.characterId !== hostCharacterId) {
@@ -511,6 +536,9 @@
         fightTextUntil = now + 700;
       }
       interpolateGuestPositions(now);
+      if (mode === 'guest' && now-lastMovementStateSend >= 50) {
+        sendGuestMovementState(now);
+      }
       if (now-lastSend >= (mode === 'host' ? STATE_UPDATE_INTERVAL : 1000)) {
         lastSend = now;
         if (mode === 'host') send(snapshot(), true);
