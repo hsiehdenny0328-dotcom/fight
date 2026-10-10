@@ -24,6 +24,14 @@
     if (hostCharacterId === null && guestCharacterId === null) return selectionFirst;
     return hostCharacterId === null ? 'host' : 'guest';
   }
+  function showMenuScreen() {
+    $('menuScreen').hidden = false;
+    $('gameScreen').hidden = true;
+  }
+  function showGameScreen() {
+    $('menuScreen').hidden = true;
+    $('gameScreen').hidden = false;
+  }
   function localCharacterId() {
     return mode === 'host' ? hostCharacterId : mode === 'guest'
       ? guestPendingCharacterId || guestCharacterId
@@ -167,8 +175,7 @@
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
     status.textContent = text;
-    $('menuScreen').hidden = false;
-    $('gameScreen').hidden = true;
+    showMenuScreen();
     ui();
   }
   function enterLocalGame() {
@@ -176,8 +183,7 @@
     release();
     keys.clear();
     startNextGame();
-    $('menuScreen').hidden = true;
-    $('gameScreen').hidden = false;
+    showGameScreen();
     status.textContent = '單人模式';
     ui();
   }
@@ -191,8 +197,7 @@
     keys.clear();
     gameStarted = false;
     message.textContent = '選擇遊戲模式開始對戰';
-    $('gameScreen').hidden = true;
-    $('menuScreen').hidden = false;
+    showMenuScreen();
   }
   function snapshot() {
     const playerState = players.map(player => ({
@@ -220,6 +225,7 @@
     }));
     return {
       type:'state',
+      screen:$('gameScreen').hidden ? 'menu' : 'game',
       selectionFirst,
       hostCharacterId,
       guestCharacterId,
@@ -249,6 +255,8 @@
   }
   function receiveState(data) {
     if (!Array.isArray(data.players) || data.players.length !== 2) return;
+    if (data.screen === 'game') showGameScreen();
+    else if (data.screen === 'menu') showMenuScreen();
     players.forEach((p,i) => {
       const incoming = data.players[i];
       // Keep local identity/control bindings; only copy known simulation fields.
@@ -340,8 +348,7 @@
       release(); keys.clear();
       if (mode === 'host') selectionFirst = Math.random() < 0.5 ? 'host' : 'guest';
       status.textContent = '已連線 · 隨機決定選角順序';
-      $('menuScreen').hidden = true;
-      $('gameScreen').hidden = false;
+      if (mode === 'host') showGameScreen();
       ui();
       if (mode === 'host') send(snapshot(), true);
     });
