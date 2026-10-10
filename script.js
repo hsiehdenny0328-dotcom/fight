@@ -1097,7 +1097,9 @@ function updateDecoys() {
         decoy.vx += (Math.random() * 2 - 1) * 1.5;
       }
 
-      if (distance <= 32 && decoy.attackCooldown === 0) {
+      const targetBox = { x: target.x, y: target.y, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+      const decoyBox = { x: decoy.x, y: decoy.y, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+      if (distance <= 32 && rectsOverlap(decoyBox, targetBox) && decoy.attackCooldown === 0) {
         decoy.attackTimer = 140;
         decoy.attackCooldown = 420 + Math.random() * 180;
         target.health = Math.max(0, target.health - 3);
