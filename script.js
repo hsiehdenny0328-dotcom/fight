@@ -909,7 +909,8 @@ function rectsOverlap(a, b) {
 
 function updatePlayers() {
   players.forEach((player) => {
-    const { left, right, jump } = player.controls;
+    const left = window.duel ? window.duel.controlKey(player, "left") : player.controls.left;
+    const right = window.duel ? window.duel.controlKey(player, "right") : player.controls.right;
     const moveLeft = keys.has(left);
     const moveRight = keys.has(right);
     if (moveLeft) {

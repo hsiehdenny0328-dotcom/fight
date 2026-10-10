@@ -39,7 +39,7 @@
     return playerOne.controls[action];
   }
   function controlKey(player, action) {
-    return onlineControlKey(player.id, action);
+    return mode === 'local' ? player.controls[action] : onlineControlKey(player.id, action);
   }
   function identifiedStates(entities) {
     return entities.map(entity => {
@@ -392,6 +392,7 @@
   });
   window.duel = {
     canSimulate: () => mode === 'local' || (mode === 'host' && connected),
+    controlKey,
     keyboard(event,down) {
       if (mode === 'local') return false;
       if (event.code === 'Space') { event.preventDefault(); if (down && !event.repeat) start(); return true; }
