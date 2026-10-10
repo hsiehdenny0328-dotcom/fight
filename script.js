@@ -29,6 +29,13 @@ const HOOK_RANGE = 560;
 const HOOK_PULL_SPEED = 11;
 const DECOY_LIFETIME = 4800;
 const ULTIMATE_COOLDOWN = 10000;
+const METEOR_COOLDOWN = 25000;
+const METEOR_DAMAGE = 24;
+const METEOR_COUNT = 3;
+const CRATER_DAMAGE = 16;
+const CRATER_WIDTH = 136;
+const CRATER_DEPTH = 56;
+const CRATER_LIFETIME = 7000;
 const ULTIMATE_DASH_DISTANCE = 90;
 const ULTIMATE_STRIKE_COUNT = 4;
 const ULTIMATE_STRIKE_INTERVAL = 300;
@@ -41,11 +48,14 @@ const keys = new Set();
 const projectiles = [];
 const hooks = [];
 const decoys = [];
+const meteors = [];
+const craters = [];
 let gameStarted = false;
 let gameOver = false;
 let matchScore = [0, 0];
 let matchOver = false;
 let nextDecoyId = 0;
+let nextMeteorVolleyId = 0;
 let screenShakeTimer = 0;
 
 const players = [
@@ -87,8 +97,9 @@ const players = [
     skillCooldown: 0,
     healCooldown: 0,
     decoyCooldown: 0,
+    meteorCooldown: 0,
     attackHit: new Set(),
-    controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", heal: "5", decoy: "/" },
+    controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", heal: "5", decoy: "/", meteor: "7" },
   },
 ];
 
@@ -130,6 +141,7 @@ function resetGame() {
     player.hookCooldown = 0;
     player.healCooldown = 0;
     player.decoyCooldown = 0;
+    player.meteorCooldown = 0;
     player.ultimateCooldown = 0;
     player.ultimateState = null;
     player.attackHit.clear();
@@ -137,6 +149,8 @@ function resetGame() {
   projectiles.length = 0;
   hooks.length = 0;
   decoys.length = 0;
+  meteors.length = 0;
+  craters.length = 0;
   effects.length = 0;
   screenShakeTimer = 0;
   gameStarted = true;
@@ -174,6 +188,12 @@ function updateHealthUI() {
   decoyStatus.textContent = players[1].decoyCooldown > 0
     ? `${(players[1].decoyCooldown / 1000).toFixed(1)} 秒`
     : "就緒";
+  const meteorStatus = document.getElementById("meteorStatus");
+  if (meteorStatus) {
+    meteorStatus.textContent = players[1].meteorCooldown > 0
+      ? `${(players[1].meteorCooldown / 1000).toFixed(1)} 秒`
+      : "就緒";
+  }
     const player2HealText = document.getElementById("healStatus");
     if (player2HealText) {
       player2HealText.textContent = players[1].healCooldown > 0
@@ -513,6 +533,55 @@ function drawProjectiles() {
     ctx.fillStyle = flameColor;
     ctx.beginPath();
     ctx.arc(projectile.x, projectile.y, PROJECTILE_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawCraters() {
+  craters.forEach((crater) => {
+    const fade = Math.min(1, crater.life / 1200);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.shadowColor = "#ff6b2e";
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = "#25170f";
+    ctx.strokeStyle = "#d97838";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(crater.x, GROUND_Y + 5, crater.width / 2, crater.depth / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(255, 190, 103, 0.75)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(crater.x, GROUND_Y + 5, crater.width * 0.34, crater.depth * 0.3, 0, 0.15, Math.PI - 0.15);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function drawMeteors() {
+  meteors.forEach((meteor) => {
+    ctx.save();
+    const wobble = Math.sin((meteor.y + meteor.x) * 0.025) * 0.08;
+    ctx.translate(meteor.x, meteor.y);
+    ctx.rotate(wobble);
+    ctx.shadowColor = "#ff642e";
+    ctx.shadowBlur = 32;
+    ctx.fillStyle = "#ff6b35";
+    ctx.beginPath();
+    ctx.arc(0, 0, meteor.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#5a3329";
+    ctx.beginPath();
+    ctx.arc(-meteor.radius * 0.1, -meteor.radius * 0.12, meteor.radius * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffc36b";
+    ctx.beginPath();
+    ctx.arc(-meteor.radius * 0.35, -meteor.radius * 0.38, meteor.radius * 0.18, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   });
@@ -865,11 +934,30 @@ function updatePlayers() {
       player.x = canvas.width - PLAYER_WIDTH;
       player.vx = 0;
     }
-    if (player.y + PLAYER_HEIGHT >= GROUND_Y) {
-      player.y = GROUND_Y - PLAYER_HEIGHT;
+    const crater = craters.find((candidate) =>
+      candidate.life > 0 &&
+      Math.abs(player.x + PLAYER_WIDTH / 2 - candidate.x) < candidate.width / 2
+    );
+    const landingY = crater ? GROUND_Y + crater.depth : GROUND_Y;
+    if (player.y + PLAYER_HEIGHT >= landingY) {
+      player.y = landingY - PLAYER_HEIGHT;
       player.vy = 0;
       player.onGround = true;
       player.jumpsRemaining = 2;
+      if (crater && !crater.hitPlayers.includes(player.id) && player.health > 0) {
+        crater.hitPlayers.push(player.id);
+        player.health = Math.max(0, player.health - CRATER_DAMAGE);
+        player.hitFlash = 240;
+        player.vx = 0;
+        player.vy = -17;
+        player.onGround = false;
+        screenShakeTimer = SCREEN_SHAKE_DURATION;
+        triggerHitVibration();
+        spawnImpact(player.x + PLAYER_WIDTH / 2, landingY, "#ff8438", 22);
+        if (player.health <= 0) {
+          message.textContent = `玩家 ${player.id} 被隕石坑擊倒！`;
+        }
+      }
     }
 
     if (player.attackTimer > 0) {
@@ -894,6 +982,9 @@ function updatePlayers() {
       player.healCooldown = Math.max(0, player.healCooldown - 16);
     }
     player.decoyCooldown = Math.max(0, player.decoyCooldown - 16);
+    if (player.id === 2) {
+      player.meteorCooldown = Math.max(0, player.meteorCooldown - 16);
+    }
     if (player.id === 1) {
       player.ultimateCooldown = Math.max(0, player.ultimateCooldown - 16);
       if (player.ultimateState) {
@@ -985,6 +1076,61 @@ function updateProjectiles() {
     ) {
       projectiles.splice(index, 1);
     }
+  }
+}
+
+function updateMeteors() {
+  for (let index = meteors.length - 1; index >= 0; index -= 1) {
+    const meteor = meteors[index];
+    meteor.vy += 0.24;
+    meteor.y += meteor.vy;
+    meteor.life -= 16;
+
+    const target = players.find((player) => {
+      if (player.id === meteor.ownerId || player.health <= 0) return false;
+      return rectsOverlap(
+        { x: meteor.x - meteor.radius, y: meteor.y - meteor.radius, width: meteor.radius * 2, height: meteor.radius * 2 },
+        { x: player.x + 5, y: player.y + 5, width: PLAYER_WIDTH - 10, height: PLAYER_HEIGHT - 5 },
+      );
+    });
+
+    if (target) {
+      target.health = Math.max(0, target.health - meteor.damage);
+      target.hitFlash = 240;
+      target.vx = Math.sign(target.x + PLAYER_WIDTH / 2 - meteor.x) * 7 || (target.id === 1 ? -7 : 7);
+      target.vy = -48;
+      target.onGround = false;
+      screenShakeTimer = SCREEN_SHAKE_DURATION;
+      triggerHitVibration();
+      spawnImpact(meteor.x, meteor.y, "#ffad4d", 24);
+      if (target.health <= 0) {
+        message.textContent = `玩家 ${target.id} 被隕石衝擊擊倒！`;
+      }
+      meteors.splice(index, 1);
+      updateHealthUI();
+      continue;
+    }
+
+    if (meteor.y + meteor.radius >= GROUND_Y || meteor.life <= 0) {
+      if (!craters.some((crater) => crater.volleyId === meteor.volleyId)) {
+        craters.push({
+          volleyId: meteor.volleyId,
+          x: meteor.craterX,
+          width: CRATER_WIDTH,
+          depth: CRATER_DEPTH,
+          life: CRATER_LIFETIME,
+          maxLife: CRATER_LIFETIME,
+          hitPlayers: [],
+        });
+      }
+      spawnImpact(meteor.x, GROUND_Y, "#ff8438", 20);
+      meteors.splice(index, 1);
+    }
+  }
+
+  for (let index = craters.length - 1; index >= 0; index -= 1) {
+    craters[index].life -= 16;
+    if (craters[index].life <= 0) craters.splice(index, 1);
   }
 }
 
@@ -1282,8 +1428,10 @@ function draw() {
     ctx.translate((Math.random() * 2 - 1) * intensity, (Math.random() * 2 - 1) * intensity);
   }
   drawBackground();
+  drawCraters();
   drawHealthBars();
   drawProjectiles();
+  drawMeteors();
   drawHooks();
   drawDecoys();
   players.forEach((player) => {
@@ -1304,6 +1452,7 @@ function gameLoop(now) {
     updatePlayers();
     processAttacks();
     updateProjectiles();
+    updateMeteors();
     updateHooks();
     updateDecoys();
     updateEffects();
@@ -1494,6 +1643,34 @@ function useUltimate(player) {
   }
 }
 
+function useMeteorStrike(player) {
+  if (player.id !== 2 || !gameStarted || player.meteorCooldown > 0 || player.health <= 0 || gameOver) return;
+  const target = players.find((candidate) => candidate.id !== player.id && candidate.health > 0);
+  if (!target) return;
+
+  const targetCenterX = target.x + PLAYER_WIDTH / 2;
+  const centerX = Math.max(44, Math.min(canvas.width - 44, targetCenterX));
+  const volleyId = nextMeteorVolleyId++;
+  for (let index = 0; index < METEOR_COUNT; index += 1) {
+    const offset = (index - 1) * 90;
+    meteors.push({
+      ownerId: player.id,
+      volleyId,
+      x: Math.max(40, Math.min(canvas.width - 40, centerX + offset)),
+      y: -70 - Math.abs(index - 1) * 24,
+      vy: 6.5 + index * 0.4,
+      radius: 70,
+      damage: METEOR_DAMAGE,
+      craterX: centerX,
+      life: 1800,
+    });
+  }
+  player.meteorCooldown = METEOR_COOLDOWN;
+  spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#bca4ff", 18);
+  message.textContent = "玩家 2 使用隕石衝擊！";
+  updateHealthUI();
+}
+
 function useHeal(player) {
   if (player.id !== 2) return;
   if (player.healCooldown > 0 || player.health <= 0 || gameOver) return;
@@ -1596,6 +1773,7 @@ window.addEventListener("keydown", (event) => {
     if (key === player.controls.ultimate) useUltimate(player);
     if (key === player.controls.hook) useHook(player);
     if (key === player.controls.decoy) useDecoys(player);
+    if (key === player.controls.meteor) useMeteorStrike(player);
   });
 });
 

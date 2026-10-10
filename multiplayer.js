@@ -2,7 +2,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   const status = $('networkStatus');
-  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate'];
+  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate', 'meteor'];
   const STATE_UPDATE_INTERVAL = 1000 / 20;
   const GUEST_INTERPOLATION_DELAY = 75;
   const MAX_BUFFERED_STATE_BYTES = 128 * 1024;
@@ -18,6 +18,7 @@
     if (mode === 'guest' && player.id === 2) {
       if (action === 'extra') return players[0].controls.hook;
       if (action === 'heal') return players[0].controls.ultimate;
+      if (action === 'meteor') return 'f';
       return players[0].controls[action];
     }
     return player.controls[action === 'extra' ? (player.id === 1 ? 'hook' : 'decoy') : action];
@@ -53,6 +54,7 @@
     if (action === 'heal') useHeal(player);
     if (action === 'extra') (player.id === 1 ? useHook : useDecoys)(player);
     if (action === 'ultimate') useUltimate(player);
+    if (action === 'meteor') useMeteorStrike(player);
   }
   function input(action, down) {
     if (down === held.has(action)) return;
@@ -73,6 +75,9 @@
     document.querySelector('[data-action="skill"]').textContent = mode === 'guest' ? '波動拳' : '瞬移 (G)';
     document.querySelector('[data-action="heal"]').hidden = mode !== 'guest';
     document.querySelector('[data-action="extra"]').textContent = mode === 'guest' ? '隱分身' : '勾索 (Y)';
+    document.querySelector('[data-action="meteor"]').hidden = mode !== 'guest';
+    document.querySelector('[data-action="meteor"]').textContent = '隕石 (F)';
+    $('meteorKeyLabel').textContent = mode === 'guest' ? 'F' : '7';
     $('player2LocalControls').hidden = mode === 'guest';
     $('player2OnlineControls').hidden = mode !== 'guest';
   }
@@ -109,6 +114,7 @@
       hookCooldown: player.hookCooldown,
       healCooldown: player.healCooldown,
       decoyCooldown: player.decoyCooldown,
+      meteorCooldown: player.meteorCooldown,
       ultimateCooldown: player.ultimateCooldown,
       ultimateState: player.ultimateState,
       attackHit: [...player.attackHit],
@@ -119,6 +125,8 @@
       projectiles:identifiedStates(projectiles.slice(-100)),
       hooks:identifiedStates(hooks.slice(-20)),
       decoys:identifiedStates(decoys.slice(-20)),
+      meteors:identifiedStates(meteors),
+      craters:identifiedStates(craters),
       effects:identifiedStates(effects
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
         .slice(-MAX_SYNCED_EFFECTS)),
@@ -141,12 +149,12 @@
       }
       p.attackHit = new Set(incoming.attackHit || []);
     });
-    [projectiles,hooks,decoys,effects].forEach((list,i) => {
-      const source = data[['projectiles','hooks','decoys','effects'][i]];
+    [projectiles,hooks,decoys,meteors,craters,effects].forEach((list,i) => {
+      const source = data[['projectiles','hooks','decoys','meteors','craters','effects'][i]];
       if (Array.isArray(source)) list.splice(0,list.length,...source.slice(0,500));
     });
     if (mode === 'guest') {
-      const entityPositions = [projectiles, hooks, decoys, effects].map(entities =>
+      const entityPositions = [projectiles, hooks, decoys, meteors, craters, effects].map(entities =>
         entities.map((entity, index) => ({
           networkId: entity.networkId ?? `index-${index}`,
           x: entity.x,
@@ -187,7 +195,7 @@
       player.x = start.x + (end.x - start.x) * progress;
       player.y = start.y + (end.y - start.y) * progress;
     });
-    [projectiles, hooks, decoys, effects].forEach((entities, listIndex) => {
+    [projectiles, hooks, decoys, meteors, craters, effects].forEach((entities, listIndex) => {
       const startPositions = new Map(from.entities[listIndex].map(entity => [entity.networkId, entity]));
       const endPositions = new Map(to.entities[listIndex].map(entity => [entity.networkId, entity]));
       entities.forEach((entity, index) => {
