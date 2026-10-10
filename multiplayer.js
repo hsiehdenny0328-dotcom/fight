@@ -2,14 +2,16 @@
 (() => {
   const $ = id => document.getElementById(id);
   const status = $('networkStatus');
-  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'extra', 'ultimate'];
+  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate'];
   const STATE_UPDATE_INTERVAL = 1000 / 20;
+  const GUEST_INTERPOLATION_DELAY = 75;
   const MAX_BUFFERED_STATE_BYTES = 128 * 1024;
   const MAX_SYNCED_EFFECTS = 32;
   let mode = 'local', peer = null, connection = null, generation = 0;
   let connected = false, lastSeen = 0, lastSend = 0, timeout;
   const held = new Set();
   const pointers = new Map();
+  const guestPositionBuffer = [];
   function send(data, isState = false) {
     if (!connection?.open) return;
     if (isState && connection.dataChannel?.bufferedAmount > MAX_BUFFERED_STATE_BYTES) return;
@@ -28,6 +30,7 @@
     if (action === 'jump') jumpPlayer(player);
     if (action === 'attack') attackPlayer(player);
     if (action === 'skill') useSkill(player);
+    if (action === 'heal') useHeal(player);
     if (action === 'extra') (player.id === 1 ? useHook : useDecoys)(player);
     if (action === 'ultimate') useUltimate(player);
   }
@@ -48,6 +51,7 @@
     $('roomCode').readOnly = mode !== 'local';
     $('startGame').disabled = mode !== 'local' && (!connected || mode === 'guest');
     document.querySelector('[data-action="skill"]').textContent = mode === 'guest' ? '波動拳' : '瞬移 (G)';
+    document.querySelector('[data-action="heal"]').hidden = mode !== 'guest';
     document.querySelector('[data-action="extra"]').textContent = mode === 'guest' ? '隱分身' : '勾索 (Y)';
   }
   function stop(text = '已離開連線 · 單機模式') {
@@ -58,6 +62,7 @@
     connection?.close(); peer?.destroy();
     peer = connection = null;
     mode = 'local';
+    guestPositionBuffer.length = 0;
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
     status.textContent = text;
@@ -112,6 +117,13 @@
       }
       p.attackHit = new Set(incoming.attackHit || []);
     });
+    if (mode === 'guest') {
+      guestPositionBuffer.push({
+        time: performance.now(),
+        players: players.map(({ x, y }) => ({ x, y })),
+      });
+      if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
+    }
     [projectiles,hooks,decoys,effects].forEach((list,i) => {
       const source = data[['projectiles','hooks','decoys','effects'][i]];
       if (Array.isArray(source)) list.splice(0,list.length,...source.slice(0,500));
@@ -120,6 +132,24 @@
     screenShakeTimer = Number(data.screenShakeTimer) || 0;
     message.textContent = String(data.message || '');
     updateHealthUI();
+  }
+  function interpolateGuestPositions(now) {
+    if (mode !== 'guest' || guestPositionBuffer.length < 2) return;
+    const renderTime = now - GUEST_INTERPOLATION_DELAY;
+    while (guestPositionBuffer.length > 2 && guestPositionBuffer[1].time <= renderTime) {
+      guestPositionBuffer.shift();
+    }
+    const [from, to] = guestPositionBuffer;
+    const duration = to.time - from.time;
+    const progress = duration > 0
+      ? Math.max(0, Math.min(1, (renderTime - from.time) / duration))
+      : 1;
+    players.forEach((player, index) => {
+      const start = from.players[index];
+      const end = to.players[index];
+      player.x = start.x + (end.x - start.x) * progress;
+      player.y = start.y + (end.y - start.y) * progress;
+    });
   }
   function attach(conn, token) {
     connection = conn;
@@ -211,6 +241,7 @@
     tick(now) {
       if (!connected) return;
       if (now-lastSeen > 10000) { stop('連線中斷，對戰已停止。請重新連線。'); return; }
+      interpolateGuestPositions(now);
       if (now-lastSend >= (mode === 'host' ? STATE_UPDATE_INTERVAL : 1000)) {
         lastSend = now;
         if (mode === 'host') send(snapshot(), true);
