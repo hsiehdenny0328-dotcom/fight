@@ -56,6 +56,18 @@
       return { ...entity, networkId };
     });
   }
+  function syncCountdown(data) {
+    if (mode !== 'guest') return;
+    const now = performance.now();
+    const countdownMs = Number(data.countdownMs);
+    const fightTextMs = Number(data.fightTextMs);
+    countdownEndsAt = Number.isFinite(countdownMs) && countdownMs > 0
+      ? now + countdownMs
+      : 0;
+    fightTextUntil = countdownEndsAt === 0 && Number.isFinite(fightTextMs) && fightTextMs > 0
+      ? now + fightTextMs
+      : 0;
+  }
   function send(data, isState = false) {
     if (!connection?.open) return;
     if (isState && connection.dataChannel?.bufferedAmount > MAX_BUFFERED_STATE_BYTES) return;
@@ -197,6 +209,12 @@
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
         .slice(-MAX_SYNCED_EFFECTS)),
       gameStarted,
+      countdownMs: mode === 'host' && countdownEndsAt > performance.now()
+        ? countdownEndsAt - performance.now()
+        : 0,
+      fightTextMs: mode === 'host' && fightTextUntil > performance.now()
+        ? fightTextUntil - performance.now()
+        : 0,
       gameOver,
       matchScore,
       matchOver,
@@ -235,6 +253,7 @@
       if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
     }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
+    syncCountdown(data);
     if (Number.isInteger(data.hostCharacterId) && [1, 2].includes(data.hostCharacterId)) {
       hostCharacterId = data.hostCharacterId;
     }
@@ -303,17 +322,7 @@
       if (token !== generation || !connected || !data || typeof data !== 'object') return;
       lastSeen = performance.now();
       if (mode === 'guest' && data.type === 'state') receiveState(data);
-      if (mode === 'guest' && data.type === 'countdown') {
-        const now = performance.now();
-        const countdownMs = Number(data.countdownMs);
-        const fightTextMs = Number(data.fightTextMs);
-        countdownEndsAt = Number.isFinite(countdownMs) && countdownMs > 0
-          ? now + countdownMs
-          : 0;
-        fightTextUntil = countdownEndsAt === 0 && Number.isFinite(fightTextMs) && fightTextMs > 0
-          ? now + fightTextMs
-          : 0;
-      }
+      if (mode === 'guest' && data.type === 'countdown') syncCountdown(data);
       if (mode === 'host' && data.type === 'pick' && !onlineMatchStarted &&
         Number.isInteger(data.characterId) && [1, 2].includes(data.characterId) &&
         selectionTurn() === 'guest' && data.characterId !== hostCharacterId) {
@@ -450,6 +459,9 @@
           countdownMs:countdownEndsAt - now,
           fightTextMs:0,
         });
+      } else if (mode === 'guest' && countdownEndsAt > 0 && countdownEndsAt <= now) {
+        countdownEndsAt = 0;
+        fightTextUntil = now + 700;
       }
       interpolateGuestPositions(now);
       if (now-lastSend >= (mode === 'host' ? STATE_UPDATE_INTERVAL : 1000)) {

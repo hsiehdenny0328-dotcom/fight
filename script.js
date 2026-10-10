@@ -1457,19 +1457,9 @@ function draw() {
   drawEffects();
   ctx.restore();
   const countdownText = window.duel?.countdownText();
-  if (countdownText) {
-    ctx.save();
-    ctx.fillStyle = "rgba(8, 12, 22, 0.48)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 76px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-    ctx.shadowBlur = 16;
-    ctx.fillText(countdownText, canvas.width / 2, canvas.height / 2);
-    ctx.restore();
-  }
+  const countdownOverlay = document.getElementById("countdownOverlay");
+  countdownOverlay.textContent = countdownText || "";
+  countdownOverlay.hidden = !countdownText;
 }
 
 let lastFrame = 0;
