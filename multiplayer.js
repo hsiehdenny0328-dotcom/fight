@@ -124,6 +124,8 @@
         .slice(-MAX_SYNCED_EFFECTS)),
       gameStarted,
       gameOver,
+      matchScore,
+      matchOver,
       screenShakeTimer,
       message:message.textContent,
     };
@@ -159,6 +161,11 @@
       if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
     }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
+    if (Array.isArray(data.matchScore) && data.matchScore.length === 2 &&
+      data.matchScore.every(score => Number.isInteger(score) && score >= 0)) {
+      matchScore = data.matchScore;
+    }
+    matchOver = !!data.matchOver;
     screenShakeTimer = Number(data.screenShakeTimer) || 0;
     message.textContent = String(data.message || '');
     updateHealthUI();
@@ -246,7 +253,7 @@
   function start() {
     if (mode === 'guest' || (mode === 'host' && !connected)) return;
     if (gameStarted && !gameOver) return;
-    release(); keys.clear(); resetGame();
+    release(); keys.clear(); startNextGame();
     if (mode === 'host') send(snapshot(), true);
   }
   $('createRoom').onclick = () => begin(true);

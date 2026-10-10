@@ -43,6 +43,8 @@ const hooks = [];
 const decoys = [];
 let gameStarted = false;
 let gameOver = false;
+let matchScore = [0, 0];
+let matchOver = false;
 let nextDecoyId = 0;
 let screenShakeTimer = 0;
 
@@ -141,6 +143,14 @@ function resetGame() {
   gameOver = false;
   message.textContent = "雙人決鬥開始！擊倒對手獲勝。";
   updateHealthUI();
+}
+
+function startNextGame() {
+  if (matchOver) {
+    matchScore = [0, 0];
+    matchOver = false;
+  }
+  resetGame();
 }
 
 function updateHealthUI() {
@@ -1197,13 +1207,20 @@ function processAttacks() {
 }
 
 function checkGameOver() {
+  if (!gameStarted || gameOver) return;
   const alive = players.filter((player) => player.health > 0);
-  if (alive.length <= 1 && gameStarted) {
+  if (alive.length <= 1) {
     gameOver = true;
     if (alive.length === 1) {
-      message.textContent = `玩家 ${alive[0].id} 獲勝！請按「開始遊戲」或空白鍵再戰。`;
+      matchScore[alive[0].id - 1] += 1;
+      if (matchScore[alive[0].id - 1] >= 2) {
+        matchOver = true;
+        message.textContent = `玩家 ${alive[0].id} 贏得三戰兩勝！最終比分 ${matchScore[0]} : ${matchScore[1]}。請開始新系列賽。`;
+      } else {
+        message.textContent = `玩家 ${alive[0].id} 贏得本局！比分 ${matchScore[0]} : ${matchScore[1]}。請開始下一局。`;
+      }
     } else {
-      message.textContent = "平手！雙方同時倒地。請按「開始遊戲」或空白鍵再戰。";
+      message.textContent = `本局平手，比分維持 ${matchScore[0]} : ${matchScore[1]}。請重賽。`;
     }
   }
 }
@@ -1241,6 +1258,20 @@ function drawHealthBars() {
       );
     }
   });
+  const centerX = canvas.width / 2;
+  const scoreTop = 10;
+  ctx.fillStyle = "rgba(12, 18, 30, 0.88)";
+  ctx.fillRect(centerX - 54, scoreTop, 108, 38);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.24)";
+  ctx.strokeRect(centerX - 54, scoreTop, 108, 38);
+  ctx.fillStyle = "#bec9e0";
+  ctx.font = "10px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("BO3", centerX, scoreTop + 9);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 20px sans-serif";
+  ctx.fillText(`${matchScore[0]} : ${matchScore[1]}`, centerX, scoreTop + 26);
 }
 
 function draw() {
@@ -1551,7 +1582,7 @@ window.addEventListener("keydown", (event) => {
   if (key.startsWith('arrow')) event.preventDefault();
   if (event.code === "Space") {
     event.preventDefault();
-    if (!gameStarted || gameOver) resetGame();
+    if (!gameStarted || gameOver) startNextGame();
     return;
   }
 
