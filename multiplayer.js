@@ -319,6 +319,7 @@
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
         .slice(-MAX_SYNCED_EFFECTS)),
       gameStarted,
+      roundTimeRemaining: window.duelTimer?.get() ?? 90000,
       countdownMs: mode === 'host' && countdownEndsAt > performance.now()
         ? countdownEndsAt - performance.now()
         : 0,
@@ -374,6 +375,9 @@
       if (guestPositionBuffer.length > 10) guestPositionBuffer.shift();
     }
     gameStarted = !!data.gameStarted; gameOver = !!data.gameOver;
+    if (mode === 'guest' && Number.isFinite(data.roundTimeRemaining)) {
+      window.duelTimer?.set(data.roundTimeRemaining);
+    }
     syncCountdown(data);
     if (Number.isInteger(data.hostCharacterId) && [1, 2].includes(data.hostCharacterId)) {
       hostCharacterId = data.hostCharacterId;

@@ -57,6 +57,7 @@ const HEAVY_ATTACK_KNOCKBACK = -18;
 const VAMPIRIC_DURATION = 4000;
 const VAMPIRIC_COOLDOWN = 7000;
 const VAMPIRIC_HEAL_RATIO = 0.4;
+const ROUND_TIME_LIMIT = 90000;
 const ULTIMATE_DASH_DISTANCE = 90;
 const ULTIMATE_STRIKE_COUNT = 4;
 const ULTIMATE_STRIKE_INTERVAL = 300;
@@ -188,6 +189,7 @@ let gameStarted = false;
 let gameOver = false;
 let matchScore = [0, 0];
 let matchOver = false;
+let roundTimeRemaining = ROUND_TIME_LIMIT;
 let nextDecoyId = 0;
 let nextMeteorVolleyId = 0;
 let screenShakeTimer = 0;
@@ -316,8 +318,10 @@ function resetGame() {
   cameraScale = 1;
   gameStarted = true;
   gameOver = false;
+  roundTimeRemaining = ROUND_TIME_LIMIT;
   message.textContent = "雙人決鬥開始！擊倒對手獲勝。";
   updateHealthUI();
+  updateRoundTimerUI();
 }
 
 function startNextGame() {
@@ -342,6 +346,7 @@ function updateHealthUI() {
         ? `${(player.skillCooldown / 1000).toFixed(1)} 秒`
         : "就緒";
     }
+
   });
   hookStatus.textContent = players[0].hookCooldown > 0
     ? `${(players[0].hookCooldown / 1000).toFixed(1)} 秒`
@@ -397,6 +402,26 @@ function updateHealthUI() {
       : `${player2DefenseKey.toUpperCase()} 防禦 就緒`;
   }
 }
+
+function updateRoundTimerUI() {
+  const timer = document.getElementById("roundTimer");
+  if (!timer) return;
+  timer.textContent = `剩餘時間：${Math.ceil(roundTimeRemaining / 1000)} 秒`;
+}
+
+function updateRoundTimer(deltaMs) {
+  if (!gameStarted || gameOver || window.duel?.countdownText?.()) return;
+  roundTimeRemaining = Math.max(0, roundTimeRemaining - deltaMs);
+  updateRoundTimerUI();
+}
+
+window.duelTimer = {
+  get: () => roundTimeRemaining,
+  set(value) {
+    roundTimeRemaining = Math.max(0, Math.min(ROUND_TIME_LIMIT, value));
+    updateRoundTimerUI();
+  },
+};
 
 function drawBackground(targetContext = ctx, targetCanvas = canvas, skyTop = 0) {
   const ctx = targetContext;
@@ -1920,6 +1945,13 @@ function processAttacks() {
 
 function checkGameOver() {
   if (!gameStarted || gameOver) return;
+  if (roundTimeRemaining <= 0) {
+    gameOver = true;
+    window.duel?.stopAudio();
+    message.textContent = `時間到，本局平手，比分維持 ${matchScore[0]} : ${matchScore[1]}。請重賽。`;
+    window.duel?.refreshUi();
+    return;
+  }
   const alive = players.filter((player) => player.health > 0);
   if (alive.length <= 1) {
     gameOver = true;
@@ -2066,6 +2098,7 @@ function gameLoop(now) {
     accumulated -= 1000 / 60;
     if (gameStarted && !gameOver && (!window.duel || window.duel.canSimulate())) {
     window.duel?.updateBot();
+    updateRoundTimer(1000 / 60);
     updatePlayers();
     processAttacks();
     updateProjectiles();
@@ -2489,6 +2522,8 @@ window.addEventListener("keyup", (event) => {
 
 resetGame();
 gameStarted = false;
+roundTimeRemaining = ROUND_TIME_LIMIT;
 message.textContent = "按空白鍵開始遊戲";
+updateRoundTimerUI();
 drawMenuBackground();
 requestAnimationFrame(gameLoop);
