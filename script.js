@@ -67,16 +67,23 @@ const SCREEN_SHAKE_VIBRATION_MULTIPLIER = 1.5;
 const effects = [];
 
 let audioContext = null;
+let audioMasterGain = null;
 let musicTimer = null;
 let musicStep = 0;
 let musicSection = 0;
 let lastCountdownSound = "";
+const VOLUME_STORAGE_KEY = "duel-arena-volume";
+let audioVolume = Number(localStorage.getItem(VOLUME_STORAGE_KEY));
+if (!Number.isFinite(audioVolume) || audioVolume < 0 || audioVolume > 1) audioVolume = 1;
 
 function ensureAudio() {
   if (!audioContext) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return null;
     audioContext = new AudioContextClass();
+    audioMasterGain = audioContext.createGain();
+    audioMasterGain.gain.value = audioVolume;
+    audioMasterGain.connect(audioContext.destination);
   }
   if (audioContext.state === "suspended") audioContext.resume();
   return audioContext;
@@ -93,9 +100,32 @@ function playTone(frequency, duration, type = "sine", volume = 0.04, delay = 0) 
   gain.gain.setValueAtTime(0.0001, start);
   gain.gain.exponentialRampToValueAtTime(volume, start + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(audio.destination);
+  oscillator.connect(gain).connect(audioMasterGain || audio.destination);
   oscillator.start(start);
   oscillator.stop(start + duration + 0.03);
+}
+
+function updateVolumeUI() {
+  const label = document.getElementById("volumeLabel");
+  const muteButton = document.getElementById("volumeMute");
+  if (label) label.textContent = `音量：${Math.round(audioVolume * 100)}%`;
+  if (muteButton) {
+    muteButton.textContent = audioVolume === 0 ? "取消靜音" : "靜音";
+    muteButton.setAttribute("aria-pressed", String(audioVolume === 0));
+  }
+}
+
+function setAudioVolume(value) {
+  audioVolume = Math.max(0, Math.min(1, value));
+  localStorage.setItem(VOLUME_STORAGE_KEY, String(audioVolume));
+  if (audioMasterGain && audioContext) {
+    audioMasterGain.gain.setTargetAtTime(audioVolume, audioContext.currentTime, 0.02);
+  }
+  updateVolumeUI();
+}
+
+function toggleAudioMute() {
+  setAudioVolume(audioVolume === 0 ? 1 : 0);
 }
 
 function playSound(name) {
@@ -2519,6 +2549,15 @@ window.addEventListener("keyup", (event) => {
   if (window.duel && window.duel.keyboard(event, false)) return;
   keys.delete(event.key.toLowerCase());
 });
+
+document.getElementById("volumeDown")?.addEventListener("click", () => {
+  setAudioVolume(audioVolume - 0.1);
+});
+document.getElementById("volumeUp")?.addEventListener("click", () => {
+  setAudioVolume(audioVolume + 0.1);
+});
+document.getElementById("volumeMute")?.addEventListener("click", toggleAudioMute);
+updateVolumeUI();
 
 resetGame();
 gameStarted = false;

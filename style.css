@@ -38,6 +38,26 @@ h1 {
   letter-spacing: 0.08em;
 }
 
+.volume-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--text-muted);
+}
+
+.volume-controls button {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.volume-controls button[aria-pressed="true"] {
+  border-color: #8bd4ff;
+  background: #355478;
+}
+
 .game-stage {
   position: relative;
   width: 100%;
