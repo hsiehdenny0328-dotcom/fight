@@ -55,6 +55,115 @@ const SCREEN_SHAKE_INTENSITY = 9;
 const SCREEN_SHAKE_VIBRATION_MULTIPLIER = 1.5;
 const effects = [];
 
+let audioContext = null;
+let musicTimer = null;
+let musicStep = 0;
+let musicSection = 0;
+let lastCountdownSound = "";
+
+function ensureAudio() {
+  if (!audioContext) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    audioContext = new AudioContextClass();
+  }
+  if (audioContext.state === "suspended") audioContext.resume();
+  return audioContext;
+}
+
+function playTone(frequency, duration, type = "sine", volume = 0.04, delay = 0) {
+  const audio = ensureAudio();
+  if (!audio) return;
+  const start = audio.currentTime + delay;
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(audio.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.03);
+}
+
+function playSound(name) {
+  const sounds = {
+    attack: () => playTone(150, 0.08, "sawtooth", 0.035),
+    hit: () => {
+      playTone(90, 0.16, "square", 0.07);
+      playTone(180, 0.1, "triangle", 0.04, 0.02);
+    },
+    skill: () => {
+      playTone(320, 0.12, "sine", 0.04);
+      playTone(640, 0.18, "sine", 0.035, 0.08);
+    },
+    defense: () => playTone(720, 0.2, "triangle", 0.045),
+    heal: () => {
+      playTone(440, 0.16, "sine", 0.04);
+      playTone(660, 0.2, "sine", 0.035, 0.1);
+    },
+    ultimate: () => {
+      playTone(110, 0.3, "sawtooth", 0.05);
+      playTone(440, 0.25, "triangle", 0.05, 0.12);
+    },
+    win: () => {
+      [523, 659, 784].forEach((frequency, index) =>
+        playTone(frequency, 0.28, "triangle", 0.055, index * 0.12));
+    },
+  };
+  sounds[name]?.();
+}
+
+function startDuelMusic() {
+  const audio = ensureAudio();
+  if (!audio || musicTimer) return;
+  const bassPatterns = [
+    [110, 110, 147, 110, 165, 110, 147, 98],
+    [98, 98, 147, 123, 165, 123, 147, 110],
+    [123, 123, 165, 147, 196, 147, 165, 110],
+  ];
+  const melodyPatterns = [
+    [440, 0, 523, 587, 659, 587, 523, 440],
+    [392, 440, 523, 659, 784, 659, 587, 523],
+    [523, 587, 659, 784, 880, 784, 659, 587],
+  ];
+  const chords = [
+    [220, 262, 330],
+    [196, 247, 294],
+    [247, 294, 370],
+    [220, 277, 330],
+  ];
+  musicTimer = window.setInterval(() => {
+    const beat = musicStep % 8;
+    const section = Math.floor(musicStep / 16) % 3;
+    const bass = bassPatterns[section][beat];
+    const melody = melodyPatterns[section][beat];
+    playTone(bass, 0.17, "triangle", 0.032);
+    if (melody) playTone(melody, 0.13, "square", 0.018, 0.035);
+    if (beat === 0 || beat === 4) playTone(64, 0.1, "sine", 0.04);
+    if (beat === 2 || beat === 6) {
+      playTone(170, 0.06, "square", 0.018);
+      playTone(340, 0.04, "square", 0.012, 0.03);
+    }
+    if (beat === 3 || beat === 7) playTone(bass * 2, 0.07, "sawtooth", 0.012);
+    if (beat === 0) {
+      const chord = chords[(musicSection + Math.floor(musicStep / 8)) % chords.length];
+      chord.forEach((frequency, index) =>
+        playTone(frequency, 0.38, "sine", 0.009, index * 0.025));
+    }
+    musicSection = section;
+    musicStep += 1;
+  }, 180);
+}
+
+function stopDuelMusic() {
+  if (musicTimer) window.clearInterval(musicTimer);
+  musicTimer = null;
+  musicStep = 0;
+  musicSection = 0;
+}
+
 const keys = new Set();
 const projectiles = [];
 const hooks = [];
@@ -1014,6 +1123,7 @@ function applyHitReaction(target, attacker) {
   target.onGround = false;
   screenShakeTimer = SCREEN_SHAKE_DURATION;
   triggerHitVibration();
+  playSound("hit");
 }
 
 function isDefending(player) {
@@ -1028,6 +1138,7 @@ function useDefense(player) {
     if (hooks[index].targetId === player.id) hooks.splice(index, 1);
   }
   spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#a9ffff", 10);
+  playSound("defense");
   updateHealthUI();
 }
 
@@ -1535,7 +1646,9 @@ function checkGameOver() {
   const alive = players.filter((player) => player.health > 0);
   if (alive.length <= 1) {
     gameOver = true;
+    window.duel?.stopAudio();
     if (alive.length === 1) {
+      playSound("win");
       matchScore[alive[0].id - 1] += 1;
       if (matchScore[alive[0].id - 1] >= 2) {
         matchOver = true;
@@ -1655,6 +1768,13 @@ function draw() {
   ctx.restore();
   drawHealthBars();
   const countdownText = window.duel?.countdownText();
+  if (!countdownText && gameStarted && !gameOver) window.duel?.startMusic();
+  if (countdownText && countdownText !== lastCountdownSound) {
+    playTone(countdownText === "Fight!" ? 880 : 440, 0.14, "square", 0.045);
+    lastCountdownSound = countdownText;
+  } else if (!countdownText) {
+    lastCountdownSound = "";
+  }
   const countdownOverlay = document.getElementById("countdownOverlay");
   countdownOverlay.textContent = countdownText || "";
   countdownOverlay.hidden = !countdownText;
@@ -1689,6 +1809,7 @@ function attackPlayer(player) {
     player.attackTimer = BASIC_ATTACK.duration;
     player.attackHit.clear();
     spawnAttackTrail(player, 8);
+    playSound("attack");
     updateHealthUI();
   }
 }
@@ -1720,6 +1841,7 @@ function useSkill(player) {
       });
     }
     spawnVoidMarker(previousX + PLAYER_WIDTH / 2, previousY);
+    playSound("skill");
     spawnImpact(destinationX + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#7a7cff", 18);
     player.skillCharges -= 1;
     if (player.skillRechargeTimer === 0) {
@@ -1730,6 +1852,7 @@ function useSkill(player) {
     const originX = player.x + PLAYER_WIDTH / 2;
     const originY = player.y + PLAYER_HEIGHT / 2;
     spawnFlameBurst(originX, originY, "#ff9745", 18);
+    playSound("skill");
     for (let index = 0; index < PROJECTILE_COUNT; index += 1) {
       const angle = (Math.PI * 2 * index) / PROJECTILE_COUNT;
       projectiles.push({
@@ -1797,6 +1920,7 @@ function executeUltimateSlash(player, target, index, total) {
 
   target.health = Math.max(0, target.health - damage);
   target.hitFlash = 200;
+  playSound("hit");
   target.vx = player.facing * (strongHit ? 12 : 7);
   target.vy = strongHit ? -17 : -6;
   target.onGround = false;
@@ -1833,6 +1957,7 @@ function useUltimate(player) {
   if (player.ultimateCooldown > 0 || player.health <= 0 || gameOver) return;
 
   const target = findUltimateTarget(player);
+  playSound("ultimate");
   const startX = player.x;
   const dashX = Math.max(0, Math.min(WORLD_WIDTH - PLAYER_WIDTH, player.x + player.facing * ULTIMATE_DASH_DISTANCE));
   player.x = dashX;
@@ -1890,6 +2015,7 @@ function useMeteorStrike(player) {
     });
   }
   player.meteorCooldown = METEOR_COOLDOWN;
+  playSound("skill");
   spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#bca4ff", 18);
   message.textContent = "玩家 2 使用隕石衝擊！";
   updateHealthUI();
@@ -1902,6 +2028,7 @@ function useHeal(player) {
   const previousHealth = player.health;
   player.health = Math.min(MAX_HEALTH, player.health + HEAL_AMOUNT);
   player.healCooldown = HEAL_COOLDOWN;
+  playSound("heal");
 
   const centerX = player.x + PLAYER_WIDTH / 2;
   const centerY = player.y + PLAYER_HEIGHT / 2;
@@ -1940,6 +2067,7 @@ function useHook(player) {
     life: 1800,
     targetId: null,
   });
+  playSound("skill");
   player.hookCooldown = 5000;
   updateHealthUI();
 }
@@ -1972,6 +2100,7 @@ function useDecoys(player) {
     nextDecoyId += 1;
   });
   player.decoyCooldown = 14500;
+  playSound("skill");
   spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#70faff", 18);
   updateHealthUI();
 }

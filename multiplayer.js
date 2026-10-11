@@ -51,6 +51,7 @@
     countdownEndsAt = performance.now() + 3000;
     fightTextUntil = 0;
     message.textContent = '機器人決鬥開始！擊倒對手獲勝。';
+    window.duel?.startAudio();
     showGameScreen();
     setNetworkStatus('connected', '機器人決鬥', `${botDifficultySettings[botDifficulty].label}難度 · 倒數後開始`);
     ui();
@@ -214,6 +215,7 @@
     generation++;
     clearTimeout(timeout);
     release();
+    window.duel?.stopAudio();
     connected = false;
     connection?.close(); peer?.destroy();
     peer = connection = null;
@@ -238,6 +240,7 @@
     countdownEndsAt = fightTextUntil = 0;
     $('botPanel').hidden = true;
     startNextGame();
+    window.duel?.startAudio();
     showGameScreen();
     setNetworkStatus('idle', '單人模式', '在同一個裝置上進行對戰。');
     ui();
@@ -252,6 +255,7 @@
     keys.clear();
     gameStarted = false;
     if (mode === 'bot') mode = 'local';
+    window.duel?.stopAudio();
     message.textContent = '選擇遊戲模式開始對戰';
     showMenuScreen();
   }
@@ -315,6 +319,7 @@
     if (!Array.isArray(data.players) || data.players.length !== 2) return;
     if (data.screen === 'game') showGameScreen();
     else if (data.screen === 'menu') showMenuScreen();
+    if (mode === 'guest' && data.gameStarted) window.duel?.startAudio();
     players.forEach((p,i) => {
       const incoming = data.players[i];
       // Keep local identity/control bindings; only copy known simulation fields.
@@ -506,6 +511,7 @@
       startNextGame();
       countdownEndsAt = performance.now() + 3000;
       fightTextUntil = 0;
+      window.duel?.startAudio();
       lastCountdownSend = 0;
       send({type:'countdown', countdownMs:3000, fightTextMs:0});
     } else {
@@ -587,6 +593,15 @@
     }
   });
   window.duel = {
+    startAudio() {
+      ensureAudio();
+    },
+    startMusic() {
+      startDuelMusic();
+    },
+    stopAudio() {
+      stopDuelMusic();
+    },
     canSimulate: () => mode === 'local' || mode === 'bot' ||
       (mode === 'host' && connected && countdownEndsAt <= performance.now()),
     controlKey,
