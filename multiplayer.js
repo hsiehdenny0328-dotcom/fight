@@ -2,6 +2,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const status = $('networkStatus');
+  const statusTitle = $('networkStatusTitle');
+  const statusDetail = $('networkStatusDetail');
   const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate', 'meteor', 'defend'];
   const ONLINE_DEFENSE_KEY = 'q';
   const STATE_UPDATE_INTERVAL = 1000 / 20;
@@ -21,6 +23,12 @@
   let onlineMatchStarted = false;
   let countdownEndsAt = 0, fightTextUntil = 0;
   let lastCountdownSend = 0;
+  function setNetworkStatus(state, title, detail) {
+    status.dataset.state = state;
+    statusTitle.textContent = title;
+    statusDetail.textContent = detail;
+    $('gameNetworkStatus').textContent = detail ? `${title} · ${detail}` : title;
+  }
   function selectionTurn() {
     if (!selectionFirst || hostCharacterId !== null && guestCharacterId !== null) return null;
     if (hostCharacterId === null && guestCharacterId === null) return selectionFirst;
@@ -131,7 +139,6 @@
     if (mode !== 'guest') keys.clear();
   }
   function ui() {
-    $('gameNetworkStatus').textContent = status.textContent;
     $('createRoom').disabled = $('joinRoom').disabled = mode !== 'local';
     $('roomCode').readOnly = mode !== 'local';
     const localId = localCharacterId();
@@ -175,7 +182,7 @@
     document.querySelector('[data-action="ultimate"]').textContent = '大招 (U)';
     $('meteorKeyLabel').textContent = mode === 'guest' ? 'F' : mode === 'host' ? 'F' : '7';
   }
-  function stop(text = '已離開連線 · 單機模式') {
+  function stop(text = '已離開連線 · 單機模式', statusState = 'idle') {
     generation++;
     clearTimeout(timeout);
     release();
@@ -192,7 +199,7 @@
     guestPositionBuffer.length = 0;
     keys.clear(); gameStarted = false;
     message.textContent = '按「開始遊戲」開始單機對戰';
-    status.textContent = text;
+    setNetworkStatus(statusState, statusState === 'error' ? '連線中斷' : '連線已結束', text);
     showMenuScreen();
     ui();
   }
@@ -202,7 +209,7 @@
     keys.clear();
     startNextGame();
     showGameScreen();
-    status.textContent = '單人模式';
+    setNetworkStatus('idle', '單人模式', '在同一個裝置上進行對戰。');
     ui();
   }
   function returnToMenu() {
@@ -367,7 +374,7 @@
       clearTimeout(timeout); connected = true; lastSeen = performance.now();
       release(); keys.clear();
       if (mode === 'host') selectionFirst = Math.random() < 0.5 ? 'host' : 'guest';
-      status.textContent = '已連線 · 隨機決定選角順序';
+      setNetworkStatus('connected', '連線成功', '正在同步對戰狀態，接著隨機決定選角順序。');
       if (mode === 'host') showGameScreen();
       ui();
       if (mode === 'host') send(snapshot(), true);
@@ -397,39 +404,62 @@
       if (mode === 'host' && data.type === 'input' && typeof data.down === 'boolean' &&
         guestCharacterId !== null) apply(players[guestCharacterId - 1],data.action,data.down);
     });
-    conn.on('close', () => { if (token === generation) stop('對方已離線，對戰已停止。請重新建立或加入房間。'); });
-    conn.on('error', () => { if (token === generation) stop('對戰連線失敗，請重新建立房間。'); });
+    conn.on('close', () => {
+      if (token === generation) stop('對方已離線，對戰已停止。請重新建立或加入房間。', 'error');
+    });
+    conn.on('error', () => {
+      if (token === generation) stop('對戰連線失敗，請重新建立房間。', 'error');
+    });
   }
   function begin(host) {
     const code = $('roomCode').value.trim().toUpperCase();
-    if (!host && !/^[A-F0-9]{8}$/.test(code)) { status.textContent = '請輸入完整的 8 碼房號'; return; }
-    if (!window.Peer) { status.textContent = '連線程式未載入，請重新整理頁面'; return; }
+    if (!host && !/^[A-F0-9]{8}$/.test(code)) {
+      setNetworkStatus('error', '房號格式不正確', '請輸入完整的 8 碼房號後再試。');
+      return;
+    }
+    if (!window.Peer) {
+      setNetworkStatus('error', '連線程式未載入', '請重新整理頁面後再試。');
+      return;
+    }
     stop(); mode = host ? 'host' : 'guest';
     const token = generation;
     const room = host ? [...crypto.getRandomValues(new Uint8Array(4))].map(n=>n.toString(16).padStart(2,'0')).join('').toUpperCase() : code;
     $('roomCode').value = room;
-    status.textContent = '正在連線…'; ui();
+    setNetworkStatus('connecting', host ? '正在建立房間' : '正在加入房間', '正在連接配對服務，請稍候…');
+    ui();
     try { peer = new Peer(host ? 'fight-v1-'+room : undefined); }
-    catch { stop('此瀏覽器無法建立連線，請改用新版 Safari 或 Chrome。'); return; }
-    timeout = setTimeout(() => { if (token === generation) stop('連線逾時。請確認房號，或讓兩支手機使用同一個 Wi-Fi 再試。'); }, 25000);
+    catch {
+      stop('此瀏覽器無法建立連線，請改用新版 Safari 或 Chrome。', 'error');
+      return;
+    }
+    timeout = setTimeout(() => {
+      if (token === generation) stop('連線逾時。請確認房號，或讓兩支手機使用同一個 Wi-Fi 再試。', 'error');
+    }, 25000);
     peer.on('open', () => {
       if (token !== generation) return;
       if (host) {
         clearTimeout(timeout);
-        status.textContent = `房號 ${room} · 等待另一支手機加入`;
-      } else attach(peer.connect('fight-v1-'+room, {reliable:true, serialization:'json'}),token);
+        setNetworkStatus('waiting', '房間已準備好', `房號 ${room} · 等待另一支手機加入。`);
+      } else {
+        setNetworkStatus('connecting', '正在配對玩家', '房號已確認，正在建立裝置連線…');
+        attach(peer.connect('fight-v1-'+room, {reliable:true, serialization:'json'}),token);
+      }
     });
     peer.on('connection', conn => {
       if (token !== generation || !host || connection) { conn.on('open',()=>conn.close()); return; }
       attach(conn,token);
-      timeout = setTimeout(() => { if (!connected && token === generation) stop('對方連線逾時，請重建房間。'); },25000);
+      timeout = setTimeout(() => {
+        if (!connected && token === generation) stop('對方連線逾時，請重建房間。', 'error');
+      }, 25000);
     });
     peer.on('error', error => {
       if (token !== generation) return;
       const reasons = {'peer-unavailable':'找不到房間，請確認房號及房主仍在線上。','unavailable-id':'房號重複，請重新建立房間。'};
-      stop(reasons[error.type] || '無法連線。請檢查網路，或改用同一個 Wi-Fi 再試。');
+      stop(reasons[error.type] || '無法連線。請檢查網路，或改用同一個 Wi-Fi 再試。', 'error');
     });
-    peer.on('disconnected', () => { if (token === generation && !connected) stop('房間服務已斷線，請重新建立或加入。'); });
+    peer.on('disconnected', () => {
+      if (token === generation && !connected) stop('房間服務已斷線，請重新建立或加入。', 'error');
+    });
   }
   function start() {
     if (mode === 'guest' || (mode === 'host' && (!connected || !hostCharacterId ||
@@ -459,7 +489,7 @@
     } else if (mode === 'guest' && characterId !== hostCharacterId) {
       guestPendingCharacterId = characterId;
       send({type:'pick', characterId});
-      status.textContent = '已送出角色選擇，等待確認';
+      setNetworkStatus('waiting', '角色選擇已送出', '等待房主確認並開始對戰。');
     }
     ui();
   }
@@ -491,7 +521,9 @@
   window.addEventListener('blur',release);
   document.addEventListener('visibilitychange', () => {
     release();
-    if (document.hidden && mode !== 'local') stop('頁面已切換至背景，對戰已停止。回來後請重新連線。');
+    if (document.hidden && mode !== 'local') {
+      stop('頁面已切換至背景，對戰已停止。回來後請重新連線。', 'error');
+    }
   });
   window.duel = {
     canSimulate: () => mode === 'local' ||
@@ -524,7 +556,10 @@
     refreshUi: ui,
     tick(now) {
       if (!connected) return;
-      if (now-lastSeen > 10000) { stop('連線中斷，對戰已停止。請重新連線。'); return; }
+      if (now-lastSeen > 10000) {
+        stop('連線中斷，對戰已停止。請重新連線。', 'error');
+        return;
+      }
       if (mode === 'host' && countdownEndsAt > 0 && countdownEndsAt <= now) {
         countdownEndsAt = 0;
         fightTextUntil = now + 700;

@@ -34,7 +34,13 @@
               <input id="roomCode" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="輸入 8 碼房號">
               <button id="joinRoom">加入房間</button>
             </div>
-            <p id="networkStatus" role="status" aria-live="polite">選擇建立房間或加入房間</p>
+            <div id="networkStatus" class="network-status" data-state="idle" role="status" aria-live="polite">
+              <span class="network-indicator" aria-hidden="true"></span>
+              <div class="network-status-copy">
+                <strong id="networkStatusTitle">準備連線</strong>
+                <span id="networkStatusDetail">建立房間，或輸入房號加入對戰。</span>
+              </div>
+            </div>
             <button id="backToModes" class="text-button">返回模式選擇</button>
           </div>
         </section>
