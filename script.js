@@ -9,6 +9,14 @@ const hookStatus = document.getElementById("hookStatus");
 const decoyStatus = document.getElementById("decoyStatus");
 
 const GROUND_Y = 440;
+const WORLD_WIDTH = 1800;
+const PLATFORMS = [
+  { x: 300, y: 330, width: 150, type: "tree" },
+  { x: 850, y: 290, width: 180, type: "house" },
+  { x: 1490, y: 340, width: 170, type: "rock" },
+];
+const CAMERA_PADDING = 80;
+const MIN_CAMERA_SCALE = 0.55;
 const GRAVITY = 0.9;
 const FRICTION = 0.85;
 const PLAYER_WIDTH = 48;
@@ -57,6 +65,7 @@ let matchOver = false;
 let nextDecoyId = 0;
 let nextMeteorVolleyId = 0;
 let screenShakeTimer = 0;
+let cameraScale = 1;
 
 const players = [
   {
@@ -153,6 +162,7 @@ function resetGame() {
   craters.length = 0;
   effects.length = 0;
   screenShakeTimer = 0;
+  cameraScale = 1;
   gameStarted = true;
   gameOver = false;
   message.textContent = "雙人決鬥開始！擊倒對手獲勝。";
@@ -202,16 +212,16 @@ function updateHealthUI() {
     }
 }
 
-function drawBackground(targetContext = ctx, targetCanvas = canvas) {
+function drawBackground(targetContext = ctx, targetCanvas = canvas, skyTop = 0) {
   const ctx = targetContext;
   const canvas = targetCanvas;
-  const skyGradient = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  const skyGradient = ctx.createLinearGradient(0, skyTop, 0, GROUND_Y);
   skyGradient.addColorStop(0, "#5a402c");
   skyGradient.addColorStop(0.38, "#9d7b4c");
   skyGradient.addColorStop(0.7, "#c79b5d");
   skyGradient.addColorStop(1, "#d0a96a");
   ctx.fillStyle = skyGradient;
-  ctx.fillRect(0, 0, canvas.width, GROUND_Y);
+  ctx.fillRect(0, skyTop, canvas.width, GROUND_Y - skyTop);
 
   ctx.fillStyle = "rgba(82, 60, 35, 0.48)";
   ctx.beginPath();
@@ -302,7 +312,8 @@ function drawBackground(targetContext = ctx, targetCanvas = canvas) {
   ctx.fill();
 
   ctx.fillStyle = "rgba(86, 61, 37, 0.6)";
-  for (let i = 0; i < 26; i += 1) {
+  const rockCount = Math.ceil(26 * canvas.width / 1100);
+  for (let i = 0; i < rockCount; i += 1) {
     const x = (i * 83 + (i % 3) * 20) % (canvas.width + 90);
     const y = GROUND_Y + 12 + ((i * 41) % 120);
     const w = 55 + (i % 4) * 14;
@@ -336,6 +347,62 @@ function drawBackground(targetContext = ctx, targetCanvas = canvas) {
 
   ctx.fillStyle = "rgba(73, 51, 29, 0.45)";
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+  PLATFORMS.forEach((platform) => {
+    const { x, y, width, type } = platform;
+    if (type === "tree") {
+      ctx.fillStyle = "#513820";
+      ctx.fillRect(x + width * 0.43, y + 10, width * 0.14, GROUND_Y - y - 10);
+      ctx.fillStyle = "#35432a";
+      ctx.beginPath();
+      ctx.arc(x + width / 2, y - 24, 48, 0, Math.PI * 2);
+      ctx.arc(x + width * 0.25, y - 10, 34, 0, Math.PI * 2);
+      ctx.arc(x + width * 0.75, y - 10, 36, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === "house") {
+      ctx.fillStyle = "#76543a";
+      ctx.fillRect(x + 18, y + 12, width - 36, GROUND_Y - y - 12);
+      ctx.fillStyle = "#493323";
+      ctx.fillRect(x + width * 0.38, y + 40, width * 0.24, 42);
+      ctx.fillStyle = "#8a4834";
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y + 14);
+      ctx.lineTo(x + width / 2, y - 22);
+      ctx.lineTo(x + width + 10, y + 14);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillStyle = "#806244";
+      ctx.beginPath();
+      ctx.moveTo(x + 12, GROUND_Y);
+      ctx.lineTo(x + 28, y + 20);
+      ctx.lineTo(x + 54, y + 8);
+      ctx.lineTo(x + 76, y + 17);
+      ctx.lineTo(x + 105, y - 7);
+      ctx.lineTo(x + 132, y + 6);
+      ctx.lineTo(x + width - 12, y + 22);
+      ctx.lineTo(x + width, GROUND_Y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(210, 174, 121, 0.36)";
+      ctx.beginPath();
+      ctx.moveTo(x + 28, y + 20);
+      ctx.lineTo(x + 54, y + 8);
+      ctx.lineTo(x + 76, y + 17);
+      ctx.lineTo(x + width - 12, y + 22);
+      ctx.lineTo(x + width, y + 28);
+      ctx.lineTo(x + 20, y + 28);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.fillStyle = type === "tree" ? "#765333" : type === "house" ? "#b88852" : "#a9875b";
+    ctx.fillRect(x, y, width, 12);
+    ctx.fillStyle = "rgba(255, 220, 155, 0.42)";
+    ctx.fillRect(x + 4, y, width - 8, 3);
+    ctx.fillStyle = "#3d2c1f";
+    ctx.fillRect(x, y + 12, width, 4);
+  });
 }
 
 function drawMenuBackground() {
@@ -935,6 +1002,7 @@ function updatePlayers() {
     }
     player.vx = Math.max(-7, Math.min(7, player.vx));
     player.vx *= player.onGround ? FRICTION : 0.96;
+    const previousBottom = player.y + PLAYER_HEIGHT;
     player.vy += GRAVITY;
     player.x += player.vx;
     player.y += player.vy;
@@ -943,15 +1011,23 @@ function updatePlayers() {
       player.x = 0;
       player.vx = 0;
     }
-    if (player.x + PLAYER_WIDTH > canvas.width) {
-      player.x = canvas.width - PLAYER_WIDTH;
+    if (player.x + PLAYER_WIDTH > WORLD_WIDTH) {
+      player.x = WORLD_WIDTH - PLAYER_WIDTH;
       player.vx = 0;
     }
-    const crater = craters.find((candidate) =>
+    const platform = player.vy >= 0
+      ? PLATFORMS.find((candidate) =>
+        previousBottom <= candidate.y &&
+        player.y + PLAYER_HEIGHT >= candidate.y &&
+        player.x + PLAYER_WIDTH > candidate.x &&
+        player.x < candidate.x + candidate.width
+      )
+      : null;
+    const crater = platform ? null : craters.find((candidate) =>
       candidate.life > 0 &&
       Math.abs(player.x + PLAYER_WIDTH / 2 - candidate.x) < candidate.width / 2
     );
-    const landingY = crater ? GROUND_Y + crater.depth : GROUND_Y;
+    const landingY = platform ? platform.y : crater ? GROUND_Y + crater.depth : GROUND_Y;
     if (player.y + PLAYER_HEIGHT >= landingY) {
       player.y = landingY - PLAYER_HEIGHT;
       player.vy = 0;
@@ -1083,7 +1159,7 @@ function updateProjectiles() {
     } else if (
       projectile.life <= 0 ||
       projectile.x < -PROJECTILE_RADIUS ||
-      projectile.x > canvas.width + PROJECTILE_RADIUS ||
+      projectile.x > WORLD_WIDTH + PROJECTILE_RADIUS ||
       projectile.y < -PROJECTILE_RADIUS ||
       projectile.y > canvas.height + PROJECTILE_RADIUS
     ) {
@@ -1175,7 +1251,7 @@ function updateHooks() {
 
       const pullStep = Math.min(HOOK_PULL_SPEED, distance - 75);
       target.x = Math.max(0, Math.min(
-        canvas.width - PLAYER_WIDTH,
+        WORLD_WIDTH - PLAYER_WIDTH,
         target.x + (dx / distance) * pullStep,
       ));
       target.y = Math.max(
@@ -1301,7 +1377,7 @@ function updateDecoys() {
     decoy.vy *= 0.96;
     decoy.vx = Math.max(-7.0, Math.min(7.0, decoy.vx));
 
-    if (decoy.x < 40 || decoy.x > canvas.width - PLAYER_WIDTH - 40) {
+    if (decoy.x < 40 || decoy.x > WORLD_WIDTH - PLAYER_WIDTH - 40) {
       decoy.vx *= -1;
       decoy.facing *= -1;
     }
@@ -1311,7 +1387,7 @@ function updateDecoys() {
       decoy.onGround = true;
       decoy.jumpsRemaining = 2;
     }
-    decoy.x = Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, decoy.x));
+    decoy.x = Math.max(0, Math.min(WORLD_WIDTH - PLAYER_WIDTH, decoy.x));
 
     if (decoy.life <= 0) {
       spawnImpact(decoy.x + PLAYER_WIDTH / 2, decoy.y + PLAYER_HEIGHT / 2, "#70faff", 6);
@@ -1450,14 +1526,35 @@ function drawHealthBars() {
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const playerOneCenter = players[0].x + PLAYER_WIDTH / 2;
+  const playerTwoCenter = players[1].x + PLAYER_WIDTH / 2;
+  const playerDistance = Math.abs(playerTwoCenter - playerOneCenter);
+  const targetScale = Math.max(
+    MIN_CAMERA_SCALE,
+    Math.min(1, canvas.width / (playerDistance + PLAYER_WIDTH + CAMERA_PADDING * 2)),
+  );
+  cameraScale += (targetScale - cameraScale) * 0.08;
+  const visibleWorldWidth = canvas.width / cameraScale;
+  const cameraLeft = visibleWorldWidth >= WORLD_WIDTH
+    ? (WORLD_WIDTH - visibleWorldWidth) / 2
+    : Math.max(
+      0,
+      Math.min(
+        WORLD_WIDTH - visibleWorldWidth,
+        (playerOneCenter + playerTwoCenter) / 2 - visibleWorldWidth / 2,
+      ),
+    );
+
   ctx.save();
   if (screenShakeTimer > 0) {
     const intensity = SCREEN_SHAKE_INTENSITY * SCREEN_SHAKE_VIBRATION_MULTIPLIER * (screenShakeTimer / SCREEN_SHAKE_DURATION);
     ctx.translate((Math.random() * 2 - 1) * intensity, (Math.random() * 2 - 1) * intensity);
   }
-  drawBackground();
+  ctx.translate(-cameraLeft * cameraScale, GROUND_Y * (1 - cameraScale));
+  ctx.scale(cameraScale, cameraScale);
+  const skyTop = -GROUND_Y * (1 - cameraScale) / cameraScale;
+  drawBackground(ctx, { width: WORLD_WIDTH, height: canvas.height }, skyTop);
   drawCraters();
-  drawHealthBars();
   drawProjectiles();
   drawMeteors();
   drawHooks();
@@ -1467,6 +1564,7 @@ function draw() {
   });
   drawEffects();
   ctx.restore();
+  drawHealthBars();
   const countdownText = window.duel?.countdownText();
   const countdownOverlay = document.getElementById("countdownOverlay");
   countdownOverlay.textContent = countdownText || "";
@@ -1514,7 +1612,7 @@ function useSkill(player) {
     const previousY = player.y + PLAYER_HEIGHT / 2;
     const destinationX = Math.max(
       0,
-      Math.min(canvas.width - PLAYER_WIDTH, player.x + player.facing * SKILL_DISTANCE),
+      Math.min(WORLD_WIDTH - PLAYER_WIDTH, player.x + player.facing * SKILL_DISTANCE),
     );
     player.x = destinationX;
     player.vx = 0;
@@ -1642,7 +1740,7 @@ function useUltimate(player) {
 
   const target = findUltimateTarget(player);
   const startX = player.x;
-  const dashX = Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, player.x + player.facing * ULTIMATE_DASH_DISTANCE));
+  const dashX = Math.max(0, Math.min(WORLD_WIDTH - PLAYER_WIDTH, player.x + player.facing * ULTIMATE_DASH_DISTANCE));
   player.x = dashX;
   player.vx = 0;
   if (!target) {
@@ -1681,14 +1779,14 @@ function useMeteorStrike(player) {
   if (!target) return;
 
   const targetCenterX = target.x + PLAYER_WIDTH / 2;
-  const centerX = Math.max(44, Math.min(canvas.width - 44, targetCenterX));
+  const centerX = Math.max(44, Math.min(WORLD_WIDTH - 44, targetCenterX));
   const volleyId = nextMeteorVolleyId++;
   for (let index = 0; index < METEOR_COUNT; index += 1) {
     const offset = (index - 1) * 90;
     meteors.push({
       ownerId: player.id,
       volleyId,
-      x: Math.max(40, Math.min(canvas.width - 40, centerX + offset)),
+      x: Math.max(40, Math.min(WORLD_WIDTH - 40, centerX + offset)),
       y: -70 - Math.abs(index - 1) * 24,
       vy: 6.5 + index * 0.4,
       radius: 70,
@@ -1756,7 +1854,7 @@ function useDecoys(player) {
   if (player.decoyCooldown > 0 || player.health <= 0 || gameOver) return;
   const offsets = [-1, 0, 1];
   offsets.forEach((offset) => {
-    const cloneX = Math.max(0, Math.min(canvas.width - PLAYER_WIDTH, player.x + offset * 60));
+    const cloneX = Math.max(0, Math.min(WORLD_WIDTH - PLAYER_WIDTH, player.x + offset * 60));
     const cloneY = player.y + (offset === 0 ? -12 : 8);
     decoys.push({
       id: `decoy-${nextDecoyId}`,
