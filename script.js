@@ -15,6 +15,7 @@ const PLATFORMS = [
   { x: 850, y: 290, width: 180, type: "house" },
   { x: 1490, y: 340, width: 170, type: "rock" },
 ];
+const brokenPlatforms = new Set();
 const CAMERA_PADDING = 80;
 const MIN_CAMERA_SCALE = 0.55;
 const GRAVITY = 0.9;
@@ -47,6 +48,12 @@ const CRATER_DAMAGE = 16;
 const CRATER_WIDTH = 136;
 const CRATER_DEPTH = 56;
 const CRATER_LIFETIME = 7000;
+const HEAVY_ATTACK_COOLDOWN = 6000;
+const HEAVY_ATTACK_MIN_DAMAGE = 8;
+const HEAVY_ATTACK_DAMAGE_PER_DISTANCE = 0.16;
+const HEAVY_ATTACK_MAX_DAMAGE = 64;
+const HEAVY_ATTACK_RADIUS = 116;
+const HEAVY_ATTACK_KNOCKBACK = -18;
 const ULTIMATE_DASH_DISTANCE = 90;
 const ULTIMATE_STRIKE_COUNT = 4;
 const ULTIMATE_STRIKE_INTERVAL = 300;
@@ -106,6 +113,10 @@ function playSound(name) {
     ultimate: () => {
       playTone(110, 0.3, "sawtooth", 0.05);
       playTone(440, 0.25, "triangle", 0.05, 0.12);
+    },
+    heavy: () => {
+      playTone(75, 0.28, "sawtooth", 0.07);
+      playTone(180, 0.2, "square", 0.045, 0.12);
     },
     win: () => {
       [523, 659, 784].forEach((frequency, index) =>
@@ -199,10 +210,14 @@ const players = [
     skillCharges: MAX_SKILL_CHARGES,
     skillRechargeTimer: 0,
     hookCooldown: 0,
+    heavyCooldown: 0,
+    heavyState: null,
+    heavyStartBottom: 0,
+    heavyImpactTimer: 0,
     ultimateCooldown: 0,
     ultimateState: null,
     attackHit: new Set(),
-    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", ultimate: "u", defend: "q" },
+    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", heavy: "f", ultimate: "u", defend: "q" },
   },
   {
     id: 2,
@@ -220,6 +235,10 @@ const players = [
     defenseTimer: 0,
     defenseCooldown: 0,
     skillCooldown: 0,
+    heavyCooldown: 0,
+    heavyState: null,
+    heavyStartBottom: 0,
+    heavyImpactTimer: 0,
     healCooldown: 0,
     decoyCooldown: 0,
     meteorCooldown: 0,
@@ -244,6 +263,7 @@ function getRandomSpawnX(existingSpawns) {
 }
 
 function resetGame() {
+  brokenPlatforms.clear();
   const spawnXs = [];
   players.forEach((player) => {
     const x = getRandomSpawnX(spawnXs);
@@ -266,6 +286,10 @@ function resetGame() {
       player.skillRechargeTimer = 0;
     }
     player.hookCooldown = 0;
+    player.heavyCooldown = 0;
+    player.heavyState = null;
+    player.heavyStartBottom = 0;
+    player.heavyImpactTimer = 0;
     player.healCooldown = 0;
     player.decoyCooldown = 0;
     player.meteorCooldown = 0;
@@ -313,6 +337,12 @@ function updateHealthUI() {
   hookStatus.textContent = players[0].hookCooldown > 0
     ? `${(players[0].hookCooldown / 1000).toFixed(1)} 秒`
     : "就緒";
+  const heavyStatus = document.getElementById("heavyStatus");
+  if (heavyStatus) {
+    heavyStatus.textContent = players[0].heavyCooldown > 0
+      ? `${(players[0].heavyCooldown / 1000).toFixed(1)} 秒`
+      : "就緒";
+  }
   decoyStatus.textContent = players[1].decoyCooldown > 0
     ? `${(players[1].decoyCooldown / 1000).toFixed(1)} 秒`
     : "就緒";
@@ -488,7 +518,89 @@ function drawBackground(targetContext = ctx, targetCanvas = canvas, skyTop = 0) 
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
 
   PLATFORMS.forEach((platform) => {
+    const platformIndex = PLATFORMS.indexOf(platform);
     const { x, y, width, type } = platform;
+    if (brokenPlatforms.has(platformIndex)) {
+      if (type === "tree") {
+        ctx.fillStyle = "#513820";
+        ctx.fillRect(x + width * 0.43, y + 16, width * 0.14, GROUND_Y - y - 16);
+        ctx.save();
+        ctx.translate(x + width * 0.5, y + 18);
+        ctx.rotate(-0.28);
+        ctx.fillRect(-width * 0.07, -8, width * 0.14, 62);
+        ctx.fillStyle = "#35432a";
+        ctx.beginPath();
+        ctx.arc(-18, -18, 28, 0, Math.PI * 2);
+        ctx.arc(24, -4, 23, 0, Math.PI * 2);
+        ctx.arc(58, 18, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = "rgba(53, 67, 42, 0.82)";
+        ctx.beginPath();
+        ctx.arc(x + width * 0.18, y + 46, 13, 0, Math.PI * 2);
+        ctx.arc(x + width * 0.82, y + 52, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#251b13";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x + width * 0.43, y + 15);
+        ctx.lineTo(x + width * 0.52, y + 34);
+        ctx.lineTo(x + width * 0.46, y + 54);
+        ctx.stroke();
+      } else if (type === "house") {
+        ctx.fillStyle = "#76543a";
+        ctx.fillRect(x + 18, y + 24, width - 36, GROUND_Y - y - 24);
+        ctx.fillStyle = "#493323";
+        ctx.fillRect(x + width * 0.38, y + 54, width * 0.24, 42);
+        ctx.fillStyle = "#623b2c";
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y + 30);
+        ctx.lineTo(x + width * 0.28, y + 6);
+        ctx.lineTo(x + width * 0.5, y + 22);
+        ctx.lineTo(x + width * 0.78, y - 4);
+        ctx.lineTo(x + width + 12, y + 28);
+        ctx.lineTo(x + width * 0.72, y + 36);
+        ctx.lineTo(x + width * 0.48, y + 30);
+        ctx.lineTo(x + width * 0.25, y + 42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#2d2119";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x + width * 0.28, y + 25);
+        ctx.lineTo(x + width * 0.4, y + 54);
+        ctx.moveTo(x + width * 0.68, y + 18);
+        ctx.lineTo(x + width * 0.58, y + 58);
+        ctx.moveTo(x + width * 0.18, y + 82);
+        ctx.lineTo(x + width * 0.42, y + 70);
+        ctx.lineTo(x + width * 0.64, y + 92);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(118, 84, 58, 0.9)";
+        ctx.fillRect(x - 18, y + 42, 34, 12);
+        ctx.fillRect(x + width - 12, y + 56, 30, 14);
+      } else {
+        ctx.fillStyle = "#5c4734";
+        ctx.beginPath();
+        ctx.moveTo(x + 18, GROUND_Y);
+        ctx.lineTo(x + 42, y + 34);
+        ctx.lineTo(x + 92, y + 18);
+        ctx.lineTo(x + width - 20, y + 38);
+        ctx.lineTo(x + width, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#30251c";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x + 42, y + 36);
+        ctx.lineTo(x + 78, y + 62);
+        ctx.lineTo(x + 112, y + 28);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(105, 77, 43, 0.78)";
+      ctx.fillRect(x + width * 0.2, y + 22, 18, 8);
+      ctx.fillRect(x + width * 0.7, y + 34, 22, 7);
+      return;
+    }
     if (type === "tree") {
       ctx.fillStyle = "#513820";
       ctx.fillRect(x + width * 0.43, y + 10, width * 0.14, GROUND_Y - y - 10);
@@ -544,6 +656,15 @@ function drawBackground(targetContext = ctx, targetCanvas = canvas, skyTop = 0) 
   });
 }
 
+function breakPlatform(platform) {
+  const platformIndex = PLATFORMS.indexOf(platform);
+  if (platformIndex < 0 || brokenPlatforms.has(platformIndex)) return;
+  brokenPlatforms.add(platformIndex);
+  spawnImpact(platform.x + platform.width / 2, platform.y, "#d9b06a", 24);
+  screenShakeTimer = Math.max(screenShakeTimer, SCREEN_SHAKE_DURATION);
+  playSound("hit");
+}
+
 function drawMenuBackground() {
   const backgroundCanvas = document.getElementById("menuBackground");
   if (!backgroundCanvas) return;
@@ -562,6 +683,11 @@ function drawPlayer(player) {
   const isRed = player.id === 1;
   const glow = isRed ? "#ff2738" : "#00eaff";
   const step = stride * (moving ? 13 : 2);
+
+  if (player.heavyState) {
+    drawHeavyDive(player, centerX, glow, isRed);
+    return;
+  }
 
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
@@ -736,6 +862,96 @@ function drawPlayer(player) {
     ctx.stroke();
     ctx.restore();
   }
+
+  if (player.heavyImpactTimer > 0) {
+    const impactAlpha = Math.min(1, player.heavyImpactTimer / 120);
+    ctx.save();
+    ctx.globalAlpha = impactAlpha;
+    ctx.strokeStyle = isRed ? "#ffbdc3" : "#d4ffff";
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 22;
+    ctx.lineWidth = 9;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(centerX - 10, player.y + 31);
+    ctx.lineTo(centerX - 25, player.y + PLAYER_HEIGHT - 4);
+    ctx.moveTo(centerX + 10, player.y + 31);
+    ctx.lineTo(centerX + 25, player.y + PLAYER_HEIGHT - 4);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawHeavyDive(player, centerX, glow, isRed) {
+  const groundY = player.y + PLAYER_HEIGHT;
+  const progress = Math.min(1, Math.max(0, (24 - player.vy) / 24));
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.ellipse(centerX, groundY + 10, 20 + progress * 12, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(centerX, player.y + PLAYER_HEIGHT / 2);
+  ctx.scale(player.facing, 1);
+  ctx.rotate(Math.PI);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = isRed ? 10 : 22;
+  const bodyColor = isRed ? "#090a0d" : "#08131c";
+  const edgeColor = isRed ? "#252832" : "#47f5ff";
+  const limb = (points, color, width) => {
+    ctx.beginPath();
+    ctx.moveTo(points[0], points[1]);
+    for (let index = 2; index < points.length; index += 2) {
+      ctx.lineTo(points[index], points[index + 1]);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  };
+  limb([-1, -28, 1, 0], edgeColor, 14);
+  limb([-1, -28, 1, 0], bodyColor, 8);
+  limb([0, 0, -13, -14, -21, -27], edgeColor, 10);
+  limb([0, 0, -13, -14, -21, -27], bodyColor, 5);
+  limb([0, 0, 13, -14, 21, -27], edgeColor, 10);
+  limb([0, 0, 13, -14, 21, -27], bodyColor, 5);
+  limb([-1, 0, -13, 11, -19, 27], edgeColor, 12);
+  limb([-1, 0, -13, 11, -19, 27], bodyColor, 7);
+  limb([1, 0, 13, 11, 19, 27], edgeColor, 12);
+  limb([1, 0, 13, 11, 19, 27], bodyColor, 7);
+  ctx.fillStyle = glow;
+  ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(0, -34, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath();
+  ctx.arc(0, -34, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(-4, -36, 2.5, 0, Math.PI * 2);
+  ctx.arc(4, -36, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.35 + progress * 0.45;
+  ctx.strokeStyle = glow;
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 26;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(centerX - 15, player.y - 24);
+  ctx.lineTo(centerX - 24, player.y - 62);
+  ctx.moveTo(centerX + 15, player.y - 24);
+  ctx.lineTo(centerX + 24, player.y - 62);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawProjectiles() {
@@ -772,21 +988,31 @@ function drawCraters() {
     const fade = Math.min(1, crater.life / 1200);
     ctx.save();
     ctx.globalAlpha = fade;
-    ctx.shadowColor = "#ff6b2e";
+    const isHeavyCrater = crater.type === "heavy";
+    ctx.shadowColor = isHeavyCrater ? "#a9c4ff" : "#ff6b2e";
     ctx.shadowBlur = 14;
-    ctx.fillStyle = "#25170f";
-    ctx.strokeStyle = "#d97838";
-    ctx.lineWidth = 5;
+    ctx.fillStyle = isHeavyCrater ? "#171b2b" : "#25170f";
+    ctx.strokeStyle = isHeavyCrater ? "#91a8ff" : "#d97838";
+    ctx.lineWidth = isHeavyCrater ? 4 : 5;
     ctx.beginPath();
     ctx.ellipse(crater.x, GROUND_Y + 5, crater.width / 2, crater.depth / 2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(255, 190, 103, 0.75)";
+    ctx.strokeStyle = isHeavyCrater ? "rgba(174, 194, 255, 0.85)" : "rgba(255, 190, 103, 0.75)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(crater.x, GROUND_Y + 5, crater.width * 0.34, crater.depth * 0.3, 0, 0.15, Math.PI - 0.15);
     ctx.stroke();
+    if (isHeavyCrater) {
+      ctx.lineWidth = 2;
+      for (let index = -2; index <= 2; index += 1) {
+        ctx.beginPath();
+        ctx.moveTo(crater.x + index * 24, GROUND_Y + 4);
+        ctx.lineTo(crater.x + index * 38, GROUND_Y + 30 + Math.abs(index) * 4);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   });
 }
@@ -1156,6 +1382,18 @@ function rectsOverlap(a, b) {
 
 function updatePlayers() {
   players.forEach((player) => {
+    if (player.heavyState) {
+      const target = players.find((candidate) =>
+        candidate.id !== player.id && candidate.health > 0);
+      if (target) {
+        const targetCenterX = target.x + PLAYER_WIDTH / 2;
+        const playerCenterX = player.x + PLAYER_WIDTH / 2;
+        player.x += Math.max(-8, Math.min(8, (targetCenterX - playerCenterX) * 0.12));
+        player.x = Math.max(0, Math.min(WORLD_WIDTH - PLAYER_WIDTH, player.x));
+        player.facing = targetCenterX >= playerCenterX ? 1 : -1;
+      }
+      player.vy = Math.max(player.vy, 24);
+    }
     const moveLeft = window.duel
       ? window.duel.isActionDown(player, "left")
       : keys.has(player.controls.left);
@@ -1189,6 +1427,7 @@ function updatePlayers() {
     player.defenseCooldown = Math.max(0, player.defenseCooldown - 16);
     const platform = player.vy >= 0
       ? PLATFORMS.find((candidate) =>
+        !brokenPlatforms.has(PLATFORMS.indexOf(candidate)) &&
         previousBottom <= candidate.y &&
         player.y + PLAYER_HEIGHT >= candidate.y &&
         player.x + PLAYER_WIDTH > candidate.x &&
@@ -1201,10 +1440,16 @@ function updatePlayers() {
     );
     const landingY = platform ? platform.y : crater ? GROUND_Y + crater.depth : GROUND_Y;
     if (player.y + PLAYER_HEIGHT >= landingY) {
+      if (player.heavyState && platform) {
+        breakPlatform(platform);
+        player.onGround = false;
+        return;
+      }
       player.y = landingY - PLAYER_HEIGHT;
       player.vy = 0;
       player.onGround = true;
       player.jumpsRemaining = 2;
+      if (player.heavyState) resolveHeavyAttack(player, landingY);
       if (crater && !crater.hitPlayers.includes(player.id) && player.health > 0) {
         crater.hitPlayers.push(player.id);
         if (!isDefending(player)) {
@@ -1241,6 +1486,8 @@ function updatePlayers() {
       }
     }
     player.hookCooldown = Math.max(0, player.hookCooldown - 16);
+    player.heavyCooldown = Math.max(0, player.heavyCooldown - 16);
+    player.heavyImpactTimer = Math.max(0, player.heavyImpactTimer - 16);
     if (player.healCooldown !== undefined) {
       player.healCooldown = Math.max(0, player.healCooldown - 16);
     }
@@ -1814,6 +2061,66 @@ function attackPlayer(player) {
   }
 }
 
+function resolveHeavyAttack(player, landingY) {
+  player.heavyState = null;
+  player.heavyImpactTimer = 220;
+  const fallDistance = Math.max(0, landingY - player.heavyStartBottom);
+  const heavyDamage = Math.min(
+    HEAVY_ATTACK_MAX_DAMAGE,
+    Math.round(HEAVY_ATTACK_MIN_DAMAGE + fallDistance * HEAVY_ATTACK_DAMAGE_PER_DISTANCE),
+  );
+  const target = players.find((candidate) => {
+    if (candidate.id === player.id || candidate.health <= 0) return false;
+    const horizontalDistance = Math.abs(
+      candidate.x + PLAYER_WIDTH / 2 - (player.x + PLAYER_WIDTH / 2),
+    );
+    const verticalDistance = Math.abs(candidate.y + PLAYER_HEIGHT - landingY);
+    return horizontalDistance <= HEAVY_ATTACK_RADIUS && verticalDistance <= 130;
+  });
+
+  playSound("hit");
+  screenShakeTimer = SCREEN_SHAKE_DURATION * 1.35;
+  triggerHitVibration();
+  spawnImpact(player.x + PLAYER_WIDTH / 2, landingY, "#9db5ff", 28);
+  if (target && !isDefending(target)) {
+    target.health = Math.max(0, target.health - heavyDamage);
+    target.hitFlash = 260;
+    target.vy = HEAVY_ATTACK_KNOCKBACK;
+    target.vx = Math.sign(target.x - player.x) * 9 || player.facing * 9;
+    target.onGround = false;
+    spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#d4ddff", 24);
+    if (target.health <= 0) {
+      message.textContent = `玩家 ${target.id} 被重擊擊倒！`;
+    }
+    updateHealthUI();
+    return;
+  }
+
+  craters.push({
+    type: "heavy",
+    volleyId: `heavy-${performance.now()}`,
+    x: player.x + PLAYER_WIDTH / 2,
+    width: 220,
+    depth: 42,
+    life: CRATER_LIFETIME,
+    maxLife: CRATER_LIFETIME,
+    hitPlayers: [player.id],
+  });
+  message.textContent = "玩家 1 重擊落地，地面留下龜裂！";
+}
+
+function useHeavyAttack(player) {
+  if (player.id !== 1 || !gameStarted || gameOver || player.health <= 0 ||
+    player.onGround || player.heavyCooldown > 0 || player.heavyState) return;
+  player.heavyCooldown = HEAVY_ATTACK_COOLDOWN;
+  player.heavyStartBottom = player.y + PLAYER_HEIGHT;
+  player.heavyState = { startedAt: performance.now() };
+  player.vx = 0;
+  player.vy = 24;
+  playSound("heavy");
+  updateHealthUI();
+}
+
 function useSkill(player) {
   if (player.health <= 0 || gameOver) return;
 
@@ -2123,6 +2430,7 @@ window.addEventListener("keydown", (event) => {
     if (key === player.controls.jump) jumpPlayer(player);
     if (key === player.controls.attack) attackPlayer(player);
     if (key === player.controls.skill) useSkill(player);
+    if (key === player.controls.heavy) useHeavyAttack(player);
     if (key === player.controls.heal) useHeal(player);
     if (key === player.controls.ultimate) useUltimate(player);
     if (key === player.controls.hook) useHook(player);

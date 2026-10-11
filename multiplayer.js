@@ -4,7 +4,7 @@
   const status = $('networkStatus');
   const statusTitle = $('networkStatusTitle');
   const statusDetail = $('networkStatusDetail');
-  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate', 'meteor', 'defend'];
+  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heavy', 'heal', 'extra', 'ultimate', 'meteor', 'defend'];
   const ONLINE_DEFENSE_KEY = 'q';
   const STATE_UPDATE_INTERVAL = 1000 / 20;
   const GUEST_INTERPOLATION_DELAY = 75;
@@ -126,6 +126,7 @@
     if (action === 'ultimate' && player.id !== 1) return;
     if (action === 'heal' && player.id !== 2) return;
     if (action === 'meteor' && player.id !== 2) return;
+    if (action === 'heavy' && player.id !== 1) return;
     const key = actionInputKey(player, action);
     if (!down) { keys.delete(key); return; }
     if (!gameStarted || gameOver ||
@@ -135,6 +136,7 @@
     if (action === 'jump') jumpPlayer(player);
     if (action === 'attack') attackPlayer(player);
     if (action === 'skill') useSkill(player);
+    if (action === 'heavy') useHeavyAttack(player);
     if (action === 'heal') useHeal(player);
     if (action === 'extra') (player.id === 1 ? useHook : useDecoys)(player);
     if (action === 'ultimate') useUltimate(player);
@@ -203,6 +205,8 @@
         (otherId === characterId && ownId !== characterId);
     });
     document.querySelector('[data-action="skill"]').textContent = localPlayer?.id === 2 ? '波動拳 (G)' : '瞬移 (G)';
+    document.querySelector('[data-action="heavy"]').hidden = localPlayer?.id !== 1;
+    document.querySelector('[data-action="heavy"]').textContent = '重擊 (F)';
     document.querySelector('[data-action="heal"]').hidden = localPlayer?.id !== 2;
     document.querySelector('[data-action="extra"]').textContent = localPlayer?.id === 2 ? '隱分身 (Y)' : '勾索 (Y)';
     document.querySelector('[data-action="meteor"]').hidden = localPlayer?.id !== 2;
@@ -282,6 +286,10 @@
       decoyCooldown: player.decoyCooldown,
       meteorCooldown: player.meteorCooldown,
       ultimateCooldown: player.ultimateCooldown,
+      heavyCooldown: player.heavyCooldown,
+      heavyState: player.heavyState,
+      heavyStartBottom: player.heavyStartBottom,
+      heavyImpactTimer: player.heavyImpactTimer,
       ultimateState: player.ultimateState,
       attackHit: [...player.attackHit],
     }));
@@ -298,6 +306,7 @@
       decoys:identifiedStates(decoys.slice(-20)),
       meteors:identifiedStates(meteors),
       craters:identifiedStates(craters),
+      brokenPlatforms:[...brokenPlatforms],
       effects:identifiedStates(effects
         .filter(effect => ['ring', 'rift', 'void', 'heal', 'flame'].includes(effect.type))
         .slice(-MAX_SYNCED_EFFECTS)),
@@ -333,6 +342,14 @@
       const source = data[['projectiles','hooks','decoys','meteors','craters','effects'][i]];
       if (Array.isArray(source)) list.splice(0,list.length,...source.slice(0,500));
     });
+    if (Array.isArray(data.brokenPlatforms)) {
+      brokenPlatforms.clear();
+      data.brokenPlatforms.forEach(index => {
+        if (Number.isInteger(index) && index >= 0 && index < PLATFORMS.length) {
+          brokenPlatforms.add(index);
+        }
+      });
+    }
     if (mode === 'guest') {
       const entityPositions = [projectiles, hooks, decoys, meteors, craters, effects].map(entities =>
         entities.map((entity, index) => ({
@@ -626,7 +643,7 @@
       if (Math.abs(distance) < 82 && Math.random() < settings.attackChance) press('attack');
       if (bot.onGround && Math.random() < 0.25 + (botDifficulty === 'boss' ? 0.2 : 0)) press('jump');
       if (Math.random() < settings.skillChance) {
-        const skillActions = bot.id === 1 ? ['skill', 'extra', 'ultimate', 'defend'] : ['skill', 'heal', 'extra', 'meteor', 'defend'];
+        const skillActions = bot.id === 1 ? ['skill', 'heavy', 'extra', 'ultimate', 'defend'] : ['skill', 'heal', 'extra', 'meteor', 'defend'];
         press(skillActions[Math.floor(Math.random() * skillActions.length)]);
       }
     },
