@@ -81,8 +81,10 @@
     const playerOne = players[0];
     if (action === 'defend') return ONLINE_DEFENSE_KEY;
     if (characterId === 1) {
+      if (['heal', 'meteor', 'decoy'].includes(action)) return null;
       return character.controls[action === 'extra' ? 'hook' : action];
     }
+    if (['heavy', 'vampiric', 'ultimate'].includes(action)) return null;
     if (action === 'extra') return playerOne.controls.hook;
     if (action === 'heal') return playerOne.controls.ultimate;
     if (action === 'meteor') return 'f';
