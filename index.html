@@ -42,12 +42,12 @@
           <h2>技能教學</h2>
           <article>
             <h3 class="player1">玩家 1｜瞬步劍士</h3>
-            <p>移動 A / D、跳躍 W、普攻 S、瞬間移動 G、勾索 Y、大招 U。</p>
+            <p>移動 A / D、跳躍 W、普攻 S、瞬間移動 G、勾索 Y、大招 U、防禦 Q（冷卻 4 秒）。</p>
           </article>
           <article>
             <h3 class="player2">玩家 2｜念力鬥士</h3>
-            <p>單機：移動 ← / →、跳躍 ↑、普攻 ↓、波動拳 .、治療 5、隱分身 /、隕石 7。</p>
-            <p>連線：移動 A / D、跳躍 W、普攻 S、波動拳 G、隱分身 Y、治療 U、隕石 F。</p>
+            <p>單機：移動 ← / →、跳躍 ↑、普攻 ↓、波動拳 .、治療 5、隱分身 /、隕石 7、防禦 0（冷卻 4 秒）。</p>
+            <p>連線：移動 A / D、跳躍 W、普攻 S、波動拳 G、隱分身 Y、治療 U、隕石 F、防禦 Q（冷卻 4 秒）。</p>
           </article>
           <p class="tutorial-tip">雙方生命值歸零前擊倒對手；連線對戰為三戰兩勝。</p>
         </section>
@@ -94,6 +94,8 @@
           </div>
           <div class="special-status">
             <div><span class="player-label player1">玩家 1 瞬間移動 (G)</span> <span id="skill1">3/3</span></div>
+            <div><span class="player-label player1">玩家 1 防禦 (Q)</span> <span id="defenseStatus">就緒</span></div>
+            <div><span class="player-label player2">玩家 2 防禦 (<span id="defenseKey2">0</span>)</span> <span id="player2DefenseStatus">就緒</span></div>
             <div><span class="player-label player2">玩家 2 波動拳</span> <span id="skill2">就緒</span></div>
             <div><span class="player-label player2">玩家 2 治療</span> <span id="healStatus">就緒</span></div>
             <div><span class="player-label player1">玩家 1 勾索 (Y)</span> <span id="hookStatus">就緒</span></div>

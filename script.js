@@ -25,11 +25,14 @@ const MAX_HEALTH = 200;
 const BASIC_ATTACK = { duration: 180, range: 50, damage: 8, height: 0.5 };
 const SKILL_DISTANCE = 180;
 const SKILL_COOLDOWN = 3000;
+const PROJECTILE_COOLDOWN = 5000;
 const MAX_SKILL_CHARGES = 3;
 const PROJECTILE_COUNT = 16;
 const PROJECTILE_SPEED = 7;
 const PROJECTILE_DAMAGE = 8;
 const PROJECTILE_RADIUS = 8;
+const DEFENSE_DURATION = 300;
+const DEFENSE_COOLDOWN = 4000;
 const HEAL_AMOUNT = 18;
 const HEAL_COOLDOWN = 8000;
 const HOOK_SPEED = 14;
@@ -81,6 +84,8 @@ const players = [
     jumpsRemaining: 2,
     attackTimer: 0,
     hitFlash: 0,
+    defenseTimer: 0,
+    defenseCooldown: 0,
     skillCooldown: 0,
     skillCharges: MAX_SKILL_CHARGES,
     skillRechargeTimer: 0,
@@ -88,7 +93,7 @@ const players = [
     ultimateCooldown: 0,
     ultimateState: null,
     attackHit: new Set(),
-    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", ultimate: "u" },
+    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", ultimate: "u", defend: "q" },
   },
   {
     id: 2,
@@ -103,12 +108,14 @@ const players = [
     jumpsRemaining: 2,
     attackTimer: 0,
     hitFlash: 0,
+    defenseTimer: 0,
+    defenseCooldown: 0,
     skillCooldown: 0,
     healCooldown: 0,
     decoyCooldown: 0,
     meteorCooldown: 0,
     attackHit: new Set(),
-    controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", heal: "5", decoy: "/", meteor: "7" },
+    controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", heal: "5", decoy: "/", meteor: "7", defend: "0" },
   },
 ];
 
@@ -142,6 +149,8 @@ function resetGame() {
     player.jumpsRemaining = 2;
     player.attackTimer = 0;
     player.hitFlash = 0;
+    player.defenseTimer = 0;
+    player.defenseCooldown = 0;
     player.skillCooldown = 0;
     if (player.id === 1) {
       player.skillCharges = MAX_SKILL_CHARGES;
@@ -204,12 +213,33 @@ function updateHealthUI() {
       ? `${(players[1].meteorCooldown / 1000).toFixed(1)} 秒`
       : "就緒";
   }
-    const player2HealText = document.getElementById("healStatus");
-    if (player2HealText) {
-      player2HealText.textContent = players[1].healCooldown > 0
-        ? `${(players[1].healCooldown / 1000).toFixed(1)} 秒`
-        : "就緒";
-    }
+  const player2HealText = document.getElementById("healStatus");
+  if (player2HealText) {
+    player2HealText.textContent = players[1].healCooldown > 0
+      ? `${(players[1].healCooldown / 1000).toFixed(1)} 秒`
+      : "就緒";
+  }
+  const defenseStatus = document.getElementById("defenseStatus");
+  if (defenseStatus) {
+    const localDefenseKey = window.duel
+      ? window.duel.controlKey(players[0], "defend")
+      : players[0].controls.defend;
+    const defenseKeyLabel = localDefenseKey.toUpperCase();
+    defenseStatus.textContent = players[0].defenseCooldown > 0
+      ? `${defenseKeyLabel} 防禦 ${(players[0].defenseCooldown / 1000).toFixed(1)} 秒`
+      : `${defenseKeyLabel} 防禦 就緒`;
+  }
+  const player2DefenseStatus = document.getElementById("player2DefenseStatus");
+  if (player2DefenseStatus) {
+    const player2DefenseKey = window.duel
+      ? window.duel.controlKey(players[1], "defend")
+      : players[1].controls.defend;
+    const defenseKeyLabel = document.getElementById("defenseKey2");
+    if (defenseKeyLabel) defenseKeyLabel.textContent = player2DefenseKey.toUpperCase();
+    player2DefenseStatus.textContent = players[1].defenseCooldown > 0
+      ? `${player2DefenseKey.toUpperCase()} 防禦 ${(players[1].defenseCooldown / 1000).toFixed(1)} 秒`
+      : `${player2DefenseKey.toUpperCase()} 防禦 就緒`;
+  }
 }
 
 function drawBackground(targetContext = ctx, targetCanvas = canvas, skyTop = 0) {
@@ -581,6 +611,19 @@ function drawPlayer(player) {
     ctx.shadowBlur = 18;
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (player.defenseTimer > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.55 + Math.sin(time * 36) * 0.2;
+    ctx.shadowColor = "#9cfbff";
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = "#c4ffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(centerX, player.y + PLAYER_HEIGHT / 2, 34, 48, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -962,6 +1005,7 @@ function triggerHitVibration() {
 }
 
 function applyHitReaction(target, attacker) {
+  if (target.defenseTimer > 0) return;
   const targetCenterX = target.x + PLAYER_WIDTH / 2;
   const attackerCenterX = attacker.x + PLAYER_WIDTH / 2;
   const direction = Math.sign(targetCenterX - attackerCenterX) || attacker.facing;
@@ -970,6 +1014,21 @@ function applyHitReaction(target, attacker) {
   target.onGround = false;
   screenShakeTimer = SCREEN_SHAKE_DURATION;
   triggerHitVibration();
+}
+
+function isDefending(player) {
+  return player.defenseTimer > 0;
+}
+
+function useDefense(player) {
+  if (!gameStarted || player.health <= 0 || gameOver || isDefending(player) || player.defenseCooldown > 0) return;
+  player.defenseTimer = DEFENSE_DURATION;
+  player.defenseCooldown = DEFENSE_COOLDOWN;
+  for (let index = hooks.length - 1; index >= 0; index -= 1) {
+    if (hooks[index].targetId === player.id) hooks.splice(index, 1);
+  }
+  spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#a9ffff", 10);
+  updateHealthUI();
 }
 
 function getAttackHitbox(player) {
@@ -1015,6 +1074,8 @@ function updatePlayers() {
       player.x = WORLD_WIDTH - PLAYER_WIDTH;
       player.vx = 0;
     }
+    player.defenseTimer = Math.max(0, player.defenseTimer - 16);
+    player.defenseCooldown = Math.max(0, player.defenseCooldown - 16);
     const platform = player.vy >= 0
       ? PLATFORMS.find((candidate) =>
         previousBottom <= candidate.y &&
@@ -1035,16 +1096,18 @@ function updatePlayers() {
       player.jumpsRemaining = 2;
       if (crater && !crater.hitPlayers.includes(player.id) && player.health > 0) {
         crater.hitPlayers.push(player.id);
-        player.health = Math.max(0, player.health - CRATER_DAMAGE);
-        player.hitFlash = 240;
-        player.vx = 0;
-        player.vy = -17;
-        player.onGround = false;
-        screenShakeTimer = SCREEN_SHAKE_DURATION;
-        triggerHitVibration();
-        spawnImpact(player.x + PLAYER_WIDTH / 2, landingY, "#ff8438", 22);
-        if (player.health <= 0) {
-          message.textContent = `玩家 ${player.id} 被隕石坑擊倒！`;
+        if (!isDefending(player)) {
+          player.health = Math.max(0, player.health - CRATER_DAMAGE);
+          player.hitFlash = 240;
+          player.vx = 0;
+          player.vy = -17;
+          player.onGround = false;
+          screenShakeTimer = SCREEN_SHAKE_DURATION;
+          triggerHitVibration();
+          spawnImpact(player.x + PLAYER_WIDTH / 2, landingY, "#ff8438", 22);
+          if (player.health <= 0) {
+            message.textContent = `玩家 ${player.id} 被隕石坑擊倒！`;
+          }
         }
       }
     }
@@ -1143,19 +1206,23 @@ function updateProjectiles() {
     });
 
     if (target) {
-      target.health = Math.max(0, target.health - projectile.damage);
-      target.hitFlash = 120;
-      const attacker = players.find((player) => player.id === projectile.ownerId);
-      if (!attacker) {
-        throw new Error(`Projectile owner ${projectile.ownerId} was not found`);
+      if (isDefending(target)) {
+        spawnImpact(projectile.x, projectile.y, "#a9ffff", 6);
+      } else {
+        target.health = Math.max(0, target.health - projectile.damage);
+        target.hitFlash = 120;
+        const attacker = players.find((player) => player.id === projectile.ownerId);
+        if (!attacker) {
+          throw new Error(`Projectile owner ${projectile.ownerId} was not found`);
+        }
+        applyHitReaction(target, attacker);
+        spawnImpact(projectile.x, projectile.y, "#54efff", 10);
+        updateHealthUI();
+        if (target.health <= 0) {
+          message.textContent = `玩家 ${target.id} 被擊倒！`;
+        }
       }
-      applyHitReaction(target, attacker);
-      spawnImpact(projectile.x, projectile.y, "#54efff", 10);
       projectiles.splice(index, 1);
-      updateHealthUI();
-      if (target.health <= 0) {
-        message.textContent = `玩家 ${target.id} 被擊倒！`;
-      }
     } else if (
       projectile.life <= 0 ||
       projectile.x < -PROJECTILE_RADIUS ||
@@ -1184,19 +1251,23 @@ function updateMeteors() {
     });
 
     if (target) {
-      target.health = Math.max(0, target.health - meteor.damage);
-      target.hitFlash = 240;
-      target.vx = Math.sign(target.x + PLAYER_WIDTH / 2 - meteor.x) * 7 || (target.id === 1 ? -7 : 7);
-      target.vy = -48;
-      target.onGround = false;
-      screenShakeTimer = SCREEN_SHAKE_DURATION;
-      triggerHitVibration();
-      spawnImpact(meteor.x, meteor.y, "#ffad4d", 24);
-      if (target.health <= 0) {
-        message.textContent = `玩家 ${target.id} 被隕石衝擊擊倒！`;
+      if (isDefending(target)) {
+        spawnImpact(meteor.x, meteor.y, "#a9ffff", 12);
+      } else {
+        target.health = Math.max(0, target.health - meteor.damage);
+        target.hitFlash = 240;
+        target.vx = Math.sign(target.x + PLAYER_WIDTH / 2 - meteor.x) * 7 || (target.id === 1 ? -7 : 7);
+        target.vy = -48;
+        target.onGround = false;
+        screenShakeTimer = SCREEN_SHAKE_DURATION;
+        triggerHitVibration();
+        spawnImpact(meteor.x, meteor.y, "#ffad4d", 24);
+        if (target.health <= 0) {
+          message.textContent = `玩家 ${target.id} 被隕石衝擊擊倒！`;
+        }
       }
       meteors.splice(index, 1);
-      updateHealthUI();
+      if (!isDefending(target)) updateHealthUI();
       continue;
     }
 
@@ -1236,6 +1307,11 @@ function updateHooks() {
     }
 
     if (target && target.health > 0) {
+      if (isDefending(target)) {
+        hooks.splice(index, 1);
+        spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#a9ffff", 8);
+        continue;
+      }
       const targetCenterX = target.x + PLAYER_WIDTH / 2;
       const targetCenterY = target.y + PLAYER_HEIGHT / 2;
       const ownerCenterX = owner.x + PLAYER_WIDTH / 2;
@@ -1296,6 +1372,11 @@ function updateHooks() {
       );
     });
     if (hitTarget) {
+      if (isDefending(hitTarget)) {
+        spawnImpact(hook.x, hook.y, "#a9ffff", 8);
+        hooks.splice(index, 1);
+        continue;
+      }
       hook.targetId = hitTarget.id;
       hitTarget.hitFlash = 180;
       applyHitReaction(hitTarget, owner);
@@ -1347,14 +1428,18 @@ function updateDecoys() {
       if (distance <= 32 && rectsOverlap(decoyBox, targetBox) && decoy.attackCooldown === 0) {
         decoy.attackTimer = 140;
         decoy.attackCooldown = 420 + Math.random() * 180;
-        target.health = Math.max(0, target.health - 3);
-        target.hitFlash = 150;
-        applyHitReaction(target, { x: decoy.x, y: decoy.y, facing: decoy.facing });
-        spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#69d7ff", 14);
-        if (target.health <= 0) {
-          message.textContent = `玩家 ${target.id} 被擊倒！`;
+        if (!isDefending(target)) {
+          target.health = Math.max(0, target.health - 3);
+          target.hitFlash = 150;
+          applyHitReaction(target, { x: decoy.x, y: decoy.y, facing: decoy.facing });
+          spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#69d7ff", 14);
+          if (target.health <= 0) {
+            message.textContent = `玩家 ${target.id} 被擊倒！`;
+          }
+          updateHealthUI();
+        } else {
+          spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#a9ffff", 6);
         }
-        updateHealthUI();
       }
 
       if (decoy.trickTimer <= 0 && decoy.onGround) {
@@ -1421,19 +1506,23 @@ function processAttacks() {
         if (target.id === attacker.id || attacker.attackHit.has(target.id) || target.health <= 0) return;
         const targetBox = { x: target.x, y: target.y, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
         if (rectsOverlap(hitbox, targetBox)) {
-          target.health = Math.max(0, target.health - BASIC_ATTACK.damage);
-          target.hitFlash = 180;
-          applyHitReaction(target, attacker);
-          spawnImpact(
-            target.x + PLAYER_WIDTH / 2,
-            target.y + PLAYER_HEIGHT / 2,
-            attacker.id === 1 ? "#ff3348" : "#52f5ff",
-            16,
-          );
           attacker.attackHit.add(target.id);
-          updateHealthUI();
-          if (target.health <= 0) {
-            message.textContent = `玩家 ${target.id} 被擊倒！`;
+          if (isDefending(target)) {
+            spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#a9ffff", 8);
+          } else {
+            target.health = Math.max(0, target.health - BASIC_ATTACK.damage);
+            target.hitFlash = 180;
+            applyHitReaction(target, attacker);
+            spawnImpact(
+              target.x + PLAYER_WIDTH / 2,
+              target.y + PLAYER_HEIGHT / 2,
+              attacker.id === 1 ? "#ff3348" : "#52f5ff",
+              16,
+            );
+            updateHealthUI();
+            if (target.health <= 0) {
+              message.textContent = `玩家 ${target.id} 被擊倒！`;
+            }
           }
         }
       });
@@ -1652,7 +1741,7 @@ function useSkill(player) {
         life: 2000,
       });
     }
-    player.skillCooldown = SKILL_COOLDOWN;
+    player.skillCooldown = PROJECTILE_COOLDOWN;
   }
   updateHealthUI();
 }
@@ -1677,6 +1766,10 @@ function executeUltimateSlash(player, target, index, total) {
   if (!target || target.health <= 0) {
     player.ultimateState = null;
     player.ultimateCooldown = ULTIMATE_COOLDOWN;
+    return;
+  }
+  if (isDefending(target)) {
+    spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#a9ffff", 8);
     return;
   }
 
@@ -1905,6 +1998,7 @@ window.addEventListener("keydown", (event) => {
     if (key === player.controls.hook) useHook(player);
     if (key === player.controls.decoy) useDecoys(player);
     if (key === player.controls.meteor) useMeteorStrike(player);
+    if (key === player.controls.defend) useDefense(player);
   });
 });
 

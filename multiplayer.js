@@ -2,7 +2,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const status = $('networkStatus');
-  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate', 'meteor'];
+  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heal', 'extra', 'ultimate', 'meteor', 'defend'];
+  const ONLINE_DEFENSE_KEY = 'q';
   const STATE_UPDATE_INTERVAL = 1000 / 20;
   const GUEST_INTERPOLATION_DELAY = 75;
   const MAX_BUFFERED_STATE_BYTES = 128 * 1024;
@@ -41,6 +42,7 @@
   function onlineControlKey(characterId, action) {
     const character = players[characterId - 1];
     const playerOne = players[0];
+    if (action === 'defend') return ONLINE_DEFENSE_KEY;
     if (characterId === 1) {
       return character.controls[action === 'extra' ? 'hook' : action];
     }
@@ -100,6 +102,7 @@
     if (action === 'extra') (player.id === 1 ? useHook : useDecoys)(player);
     if (action === 'ultimate') useUltimate(player);
     if (action === 'meteor') useMeteorStrike(player);
+    if (action === 'defend') useDefense(player);
   }
   function sendGuestMovementState(now = performance.now()) {
     send({
@@ -227,6 +230,8 @@
       jumpsRemaining: player.jumpsRemaining,
       attackTimer: player.attackTimer,
       hitFlash: player.hitFlash,
+      defenseTimer: player.defenseTimer,
+      defenseCooldown: player.defenseCooldown,
       skillCooldown: player.skillCooldown,
       skillCharges: player.skillCharges,
       skillRechargeTimer: player.skillRechargeTimer,
