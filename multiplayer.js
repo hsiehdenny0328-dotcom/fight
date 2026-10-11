@@ -11,6 +11,14 @@
   const MAX_BUFFERED_STATE_BYTES = 128 * 1024;
   const MAX_SYNCED_EFFECTS = 32;
   let mode = 'local', peer = null, connection = null, generation = 0;
+  let botDifficulty = 'normal', botPlayerCharacter = 1, botOpponentCharacter = 2;
+  const botDifficultySettings = {
+    easy: { label: '新手', reaction: 1050, attackChance: 0.22, skillChance: 0.08 },
+    normal: { label: '普通', reaction: 700, attackChance: 0.38, skillChance: 0.16 },
+    hard: { label: '困難', reaction: 400, attackChance: 0.58, skillChance: 0.28 },
+    boss: { label: '魔王', reaction: 180, attackChance: 0.82, skillChance: 0.48 },
+  };
+  let botActionTimer = 0;
   let connected = false, lastSeen = 0, lastSend = 0, timeout;
   let lastMovementStateSend = 0;
   const held = new Set();
@@ -29,6 +37,24 @@
     statusDetail.textContent = detail;
     $('gameNetworkStatus').textContent = detail ? `${title} · ${detail}` : title;
   }
+  function enterBotSetup() {
+    $('botPanel').hidden = false;
+    $('onlinePanel').hidden = true;
+  }
+  function startBotGame() {
+    mode = 'bot';
+    botDifficulty = $('botDifficulty').value;
+    release();
+    keys.clear();
+    botActionTimer = 0;
+    startNextGame();
+    countdownEndsAt = performance.now() + 3000;
+    fightTextUntil = 0;
+    message.textContent = '機器人決鬥開始！擊倒對手獲勝。';
+    showGameScreen();
+    setNetworkStatus('connected', '機器人決鬥', `${botDifficultySettings[botDifficulty].label}難度 · 倒數後開始`);
+    ui();
+  }
   function selectionTurn() {
     if (!selectionFirst || hostCharacterId !== null && guestCharacterId !== null) return null;
     if (hostCharacterId === null && guestCharacterId === null) return selectionFirst;
@@ -45,8 +71,10 @@
   function localCharacterId() {
     return mode === 'host' ? hostCharacterId : mode === 'guest'
       ? guestPendingCharacterId || guestCharacterId
-      : 1;
+      : mode === 'bot' ? botPlayerCharacter : 1;
   }
+  function botPlayerId() { return botPlayerCharacter; }
+  function botOpponentId() { return botOpponentCharacter; }
   function onlineControlKey(characterId, action) {
     const character = players[characterId - 1];
     const playerOne = players[0];
@@ -63,7 +91,7 @@
     return mode === 'local' ? player.controls[action] : onlineControlKey(player.id, action);
   }
   function actionInputKey(player, action) {
-    return mode === 'local' ? controlKey(player, action) : `online:${player.id}:${action}`;
+    return mode === 'local' || mode === 'bot' ? controlKey(player, action) : `online:${player.id}:${action}`;
   }
   function identifiedStates(entities) {
     return entities.map(entity => {
@@ -128,7 +156,7 @@
       if (action === 'left' || action === 'right') sendGuestMovementState();
       else send({type:'input', action, down});
     }
-    else if (mode === 'local' || connected) {
+    else if (mode === 'local' || mode === 'bot' || connected) {
       const playerId = mode === 'local' ? 1 : localCharacterId();
       apply(players[playerId - 1], action, down);
     }
@@ -145,11 +173,11 @@
     const localPlayer = localId ? players[localId - 1] : null;
     const selectionReady = mode === 'local' || (hostCharacterId !== null && guestCharacterId !== null &&
       hostCharacterId !== guestCharacterId);
-    $('startGame').disabled = mode !== 'local' && (!connected || mode === 'guest' || !selectionReady);
+    $('startGame').disabled = mode !== 'local' && mode !== 'bot' && (!connected || mode === 'guest' || !selectionReady);
     $('startGame').hidden = mode === 'guest' || !gameOver;
     $('startGame').textContent = gameOver ? '重新開始' : '開始遊戲';
-    $('characterSelect').hidden = mode === 'local' || !connected || onlineMatchStarted;
-    $('touchControls').hidden = mode !== 'local' && !gameStarted;
+    $('characterSelect').hidden = mode === 'local' || mode === 'bot' || !connected || onlineMatchStarted;
+    $('touchControls').hidden = mode !== 'local' && mode !== 'bot' && !gameStarted;
     const turn = selectionTurn();
     $('characterSelectStatus').textContent = !selectionFirst
       ? '等待隨機決定選角順序'
@@ -207,6 +235,8 @@
     if (mode !== 'local') stop();
     release();
     keys.clear();
+    countdownEndsAt = fightTextUntil = 0;
+    $('botPanel').hidden = true;
     startNextGame();
     showGameScreen();
     setNetworkStatus('idle', '單人模式', '在同一個裝置上進行對戰。');
@@ -221,6 +251,7 @@
     release();
     keys.clear();
     gameStarted = false;
+    if (mode === 'bot') mode = 'local';
     message.textContent = '選擇遊戲模式開始對戰';
     showMenuScreen();
   }
@@ -462,6 +493,10 @@
     });
   }
   function start() {
+    if (mode === 'bot') {
+      startBotGame();
+      return;
+    }
     if (mode === 'guest' || (mode === 'host' && (!connected || !hostCharacterId ||
       !guestCharacterId || hostCharacterId === guestCharacterId))) return;
     if (gameStarted && !gameOver) return;
@@ -497,14 +532,40 @@
   $('joinRoom').onclick = () => begin(false);
   $('startGame').onclick = start;
   $('singlePlayer').onclick = enterLocalGame;
-  $('onlineMode').onclick = () => { $('onlinePanel').hidden = false; };
+  $('botMode').onclick = enterBotSetup;
+  $('startBotGame').onclick = startBotGame;
+  $('onlineMode').onclick = () => {
+    $('onlinePanel').hidden = false;
+    $('botPanel').hidden = true;
+  };
   $('backToModes').onclick = () => {
     if (mode !== 'local') stop('連線已取消，請重新選擇模式。');
     $('onlinePanel').hidden = true;
+    $('botPanel').hidden = true;
   };
   $('returnToMenu').onclick = returnToMenu;
   document.querySelectorAll('[data-character]').forEach(button => {
     button.addEventListener('click', () => chooseCharacter(Number(button.dataset.character)));
+  });
+  document.querySelectorAll('[data-bot-character]').forEach(button => {
+    button.addEventListener('click', () => {
+      botPlayerCharacter = Number(button.dataset.botCharacter);
+      if (botOpponentCharacter === botPlayerCharacter) botOpponentCharacter = 3 - botPlayerCharacter;
+      document.querySelectorAll('[data-bot-character]').forEach(option =>
+        option.classList.toggle('selected', Number(option.dataset.botCharacter) === botPlayerCharacter));
+      document.querySelectorAll('[data-bot-opponent]').forEach(option =>
+        option.classList.toggle('selected', Number(option.dataset.botOpponent) === botOpponentCharacter));
+    });
+  });
+  document.querySelectorAll('[data-bot-opponent]').forEach(button => {
+    button.addEventListener('click', () => {
+      botOpponentCharacter = Number(button.dataset.botOpponent);
+      if (botPlayerCharacter === botOpponentCharacter) botPlayerCharacter = 3 - botOpponentCharacter;
+      document.querySelectorAll('[data-bot-character]').forEach(option =>
+        option.classList.toggle('selected', Number(option.dataset.botCharacter) === botPlayerCharacter));
+      document.querySelectorAll('[data-bot-opponent]').forEach(option =>
+        option.classList.toggle('selected', Number(option.dataset.botOpponent) === botOpponentCharacter));
+    });
   });
   document.querySelectorAll('[data-action]').forEach(button => {
     button.addEventListener('pointerdown', event => {
@@ -526,11 +587,33 @@
     }
   });
   window.duel = {
-    canSimulate: () => mode === 'local' ||
+    canSimulate: () => mode === 'local' || mode === 'bot' ||
       (mode === 'host' && connected && countdownEndsAt <= performance.now()),
     controlKey,
     isActionDown(player, action) {
+      if (mode === 'bot' && player.id === botOpponentId()) return keys.has(`bot:${action}`);
       return keys.has(actionInputKey(player, action));
+    },
+    updateBot() {
+      if (mode !== 'bot' || !gameStarted || gameOver || countdownEndsAt > performance.now()) return;
+      const player = players[botPlayerId() - 1];
+      const bot = players[botOpponentId() - 1];
+      const target = player;
+      const settings = botDifficultySettings[botDifficulty];
+      const distance = target.x + PLAYER_WIDTH / 2 - (bot.x + PLAYER_WIDTH / 2);
+      keys.delete('bot:left'); keys.delete('bot:right');
+      if (Math.abs(distance) > 62) keys.add(`bot:${distance < 0 ? 'left' : 'right'}`);
+      bot.facing = distance >= 0 ? 1 : -1;
+      botActionTimer -= 1000 / 60;
+      if (botActionTimer > 0) return;
+      botActionTimer = settings.reaction;
+      const press = action => { apply(bot, action, true); apply(bot, action, false); };
+      if (Math.abs(distance) < 82 && Math.random() < settings.attackChance) press('attack');
+      if (bot.onGround && Math.random() < 0.25 + (botDifficulty === 'boss' ? 0.2 : 0)) press('jump');
+      if (Math.random() < settings.skillChance) {
+        const skillActions = bot.id === 1 ? ['skill', 'extra', 'ultimate', 'defend'] : ['skill', 'heal', 'extra', 'meteor', 'defend'];
+        press(skillActions[Math.floor(Math.random() * skillActions.length)]);
+      }
     },
     keyboard(event,down) {
       if (mode === 'local') {
@@ -543,7 +626,7 @@
       if (event.code === 'Space') { event.preventDefault(); if (down && !event.repeat) start(); return true; }
       const key = event.key.toLowerCase();
       const characterId = localCharacterId();
-      const action = characterId && actions.find(a => onlineControlKey(characterId,a) === key);
+      const action = characterId && actions.find(a => controlKey(players[characterId - 1], a) === key);
       if (action) { event.preventDefault(); if (!event.repeat) input(action,down); }
       return true;
     },

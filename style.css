@@ -293,6 +293,23 @@ body {
 .mode-button span { color: var(--text-muted); font-size: 13px; }
 .mode-button:hover { border-color: #8bd4ff; background: linear-gradient(110deg, #315d86, #233c5e); }
 
+.bot-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(139, 212, 255, 0.25);
+  border-radius: 14px;
+  background: rgba(12, 24, 42, 0.72);
+  color: var(--text-muted);
+}
+.bot-panel h3 { color: var(--text); }
+.bot-panel label { color: var(--text); font-weight: 700; }
+.bot-panel select { width: 100%; }
+.bot-character-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bot-character-option { min-height: 44px; padding: 8px; font-size: 13px; }
+.bot-character-option.selected { border-color: #8bd4ff; background: #355478; color: #fff; }
+.start-bot-button { background: #286b78; }
+
 .online-panel {
   display: grid;
   gap: 12px;

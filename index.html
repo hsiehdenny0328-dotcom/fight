@@ -22,6 +22,30 @@
             <strong>單人模式</strong>
             <span>在同一個裝置上進行對戰</span>
           </button>
+          <button id="botMode" class="mode-button">
+            <strong>與機器人決鬥</strong>
+            <span>自訂雙方角色，挑戰不同強度的人工智慧</span>
+          </button>
+          <div id="botPanel" class="bot-panel" hidden>
+            <h3>設定機器人決鬥</h3>
+            <label for="botDifficulty">選擇難度</label>
+            <select id="botDifficulty">
+              <option value="easy">新手</option>
+              <option value="normal" selected>普通</option>
+              <option value="hard">困難</option>
+              <option value="boss">魔王</option>
+            </select>
+            <p>選擇玩家與電腦使用的角色。</p>
+            <div class="bot-character-options">
+              <button type="button" class="bot-character-option selected" data-bot-character="1">玩家：瞬步劍士</button>
+              <button type="button" class="bot-character-option" data-bot-character="2">玩家：念力鬥士</button>
+            </div>
+            <div class="bot-character-options">
+              <button type="button" class="bot-character-option" data-bot-opponent="1">電腦：瞬步劍士</button>
+              <button type="button" class="bot-character-option selected" data-bot-opponent="2">電腦：念力鬥士</button>
+            </div>
+            <button id="startBotGame" class="start-bot-button">開始決鬥</button>
+          </div>
           <button id="onlineMode" class="mode-button">
             <strong>連線模式</strong>
             <span>與另一位玩家線上對戰</span>

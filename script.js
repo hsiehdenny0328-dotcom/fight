@@ -1668,6 +1668,7 @@ function gameLoop(now) {
   while (accumulated >= 1000 / 60) {
     accumulated -= 1000 / 60;
     if (gameStarted && !gameOver && (!window.duel || window.duel.canSimulate())) {
+    window.duel?.updateBot();
     updatePlayers();
     processAttacks();
     updateProjectiles();
