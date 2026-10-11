@@ -4,7 +4,7 @@
   const status = $('networkStatus');
   const statusTitle = $('networkStatusTitle');
   const statusDetail = $('networkStatusDetail');
-  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heavy', 'heal', 'extra', 'ultimate', 'meteor', 'defend'];
+  const actions = ['left', 'right', 'jump', 'attack', 'skill', 'heavy', 'vampiric', 'heal', 'extra', 'ultimate', 'meteor', 'defend'];
   const ONLINE_DEFENSE_KEY = 'q';
   const STATE_UPDATE_INTERVAL = 1000 / 20;
   const GUEST_INTERPOLATION_DELAY = 75;
@@ -127,6 +127,7 @@
     if (action === 'heal' && player.id !== 2) return;
     if (action === 'meteor' && player.id !== 2) return;
     if (action === 'heavy' && player.id !== 1) return;
+    if (action === 'vampiric' && player.id !== 1) return;
     const key = actionInputKey(player, action);
     if (!down) { keys.delete(key); return; }
     if (!gameStarted || gameOver ||
@@ -137,6 +138,7 @@
     if (action === 'attack') attackPlayer(player);
     if (action === 'skill') useSkill(player);
     if (action === 'heavy') useHeavyAttack(player);
+    if (action === 'vampiric') useVampiric(player);
     if (action === 'heal') useHeal(player);
     if (action === 'extra') (player.id === 1 ? useHook : useDecoys)(player);
     if (action === 'ultimate') useUltimate(player);
@@ -207,6 +209,8 @@
     document.querySelector('[data-action="skill"]').textContent = localPlayer?.id === 2 ? '波動拳 (G)' : '瞬移 (G)';
     document.querySelector('[data-action="heavy"]').hidden = localPlayer?.id !== 1;
     document.querySelector('[data-action="heavy"]').textContent = '重擊 (F)';
+    document.querySelector('[data-action="vampiric"]').hidden = localPlayer?.id !== 1;
+    document.querySelector('[data-action="vampiric"]').textContent = '吸血 (E)';
     document.querySelector('[data-action="heal"]').hidden = localPlayer?.id !== 2;
     document.querySelector('[data-action="extra"]').textContent = localPlayer?.id === 2 ? '隱分身 (Y)' : '勾索 (Y)';
     document.querySelector('[data-action="meteor"]').hidden = localPlayer?.id !== 2;
@@ -290,6 +294,8 @@
       heavyState: player.heavyState,
       heavyStartBottom: player.heavyStartBottom,
       heavyImpactTimer: player.heavyImpactTimer,
+      vampiricTimer: player.vampiricTimer,
+      vampiricCooldown: player.vampiricCooldown,
       ultimateState: player.ultimateState,
       attackHit: [...player.attackHit],
     }));

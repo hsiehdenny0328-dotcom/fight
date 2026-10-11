@@ -54,6 +54,9 @@ const HEAVY_ATTACK_DAMAGE_PER_DISTANCE = 0.13;
 const HEAVY_ATTACK_MAX_DAMAGE = 56;
 const HEAVY_ATTACK_RADIUS = 116;
 const HEAVY_ATTACK_KNOCKBACK = -18;
+const VAMPIRIC_DURATION = 4000;
+const VAMPIRIC_COOLDOWN = 7000;
+const VAMPIRIC_HEAL_RATIO = 0.4;
 const ULTIMATE_DASH_DISTANCE = 90;
 const ULTIMATE_STRIKE_COUNT = 4;
 const ULTIMATE_STRIKE_INTERVAL = 300;
@@ -214,10 +217,12 @@ const players = [
     heavyState: null,
     heavyStartBottom: 0,
     heavyImpactTimer: 0,
+    vampiricTimer: 0,
+    vampiricCooldown: 0,
     ultimateCooldown: 0,
     ultimateState: null,
     attackHit: new Set(),
-    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", heavy: "f", ultimate: "u", defend: "q" },
+    controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", heavy: "f", vampiric: "e", ultimate: "u", defend: "q" },
   },
   {
     id: 2,
@@ -239,6 +244,8 @@ const players = [
     heavyState: null,
     heavyStartBottom: 0,
     heavyImpactTimer: 0,
+    vampiricTimer: 0,
+    vampiricCooldown: 0,
     healCooldown: 0,
     decoyCooldown: 0,
     meteorCooldown: 0,
@@ -290,6 +297,8 @@ function resetGame() {
     player.heavyState = null;
     player.heavyStartBottom = 0;
     player.heavyImpactTimer = 0;
+    player.vampiricTimer = 0;
+    player.vampiricCooldown = 0;
     player.healCooldown = 0;
     player.decoyCooldown = 0;
     player.meteorCooldown = 0;
@@ -342,6 +351,14 @@ function updateHealthUI() {
     heavyStatus.textContent = players[0].heavyCooldown > 0
       ? `${(players[0].heavyCooldown / 1000).toFixed(1)} 秒`
       : "就緒";
+  }
+  const vampiricStatus = document.getElementById("vampiricStatus");
+  if (vampiricStatus) {
+    vampiricStatus.textContent = players[0].vampiricTimer > 0
+      ? `E 吸血 ${(players[0].vampiricTimer / 1000).toFixed(1)} 秒`
+      : players[0].vampiricCooldown > 0
+        ? `E 吸血冷卻 ${(players[0].vampiricCooldown / 1000).toFixed(1)} 秒`
+        : "E 吸血 就緒";
   }
   decoyStatus.textContent = players[1].decoyCooldown > 0
     ? `${(players[1].decoyCooldown / 1000).toFixed(1)} 秒`
@@ -1356,6 +1373,17 @@ function isDefending(player) {
   return player.defenseTimer > 0;
 }
 
+function dealDamage(attacker, target, damage) {
+  const actualDamage = Math.min(target.health, damage);
+  target.health = Math.max(0, target.health - damage);
+  if (attacker.id === 1 && attacker.vampiricTimer > 0 && actualDamage > 0) {
+    const recovery = Math.ceil(actualDamage * VAMPIRIC_HEAL_RATIO);
+    attacker.health = Math.min(MAX_HEALTH, attacker.health + recovery);
+    spawnImpact(attacker.x + PLAYER_WIDTH / 2, attacker.y + PLAYER_HEIGHT / 2, "#d94bff", 8);
+  }
+  return actualDamage;
+}
+
 function useDefense(player) {
   if (!gameStarted || player.health <= 0 || gameOver || isDefending(player) || player.defenseCooldown > 0) return;
   player.defenseTimer = DEFENSE_DURATION;
@@ -1488,6 +1516,8 @@ function updatePlayers() {
     player.hookCooldown = Math.max(0, player.hookCooldown - 16);
     player.heavyCooldown = Math.max(0, player.heavyCooldown - 16);
     player.heavyImpactTimer = Math.max(0, player.heavyImpactTimer - 16);
+    player.vampiricTimer = Math.max(0, player.vampiricTimer - 16);
+    player.vampiricCooldown = Math.max(0, player.vampiricCooldown - 16);
     if (player.healCooldown !== undefined) {
       player.healCooldown = Math.max(0, player.healCooldown - 16);
     }
@@ -1868,7 +1898,7 @@ function processAttacks() {
           if (isDefending(target)) {
             spawnImpact(target.x + PLAYER_WIDTH / 2, target.y + PLAYER_HEIGHT / 2, "#a9ffff", 8);
           } else {
-            target.health = Math.max(0, target.health - BASIC_ATTACK.damage);
+            dealDamage(attacker, target, BASIC_ATTACK.damage);
             target.hitFlash = 180;
             applyHitReaction(target, attacker);
             spawnImpact(
@@ -2083,7 +2113,7 @@ function resolveHeavyAttack(player, landingY) {
   triggerHitVibration();
   spawnImpact(player.x + PLAYER_WIDTH / 2, landingY, "#9db5ff", 28);
   if (target && !isDefending(target)) {
-    target.health = Math.max(0, target.health - heavyDamage);
+    dealDamage(player, target, heavyDamage);
     target.hitFlash = 260;
     target.vy = HEAVY_ATTACK_KNOCKBACK;
     target.vx = Math.sign(target.x - player.x) * 9 || player.facing * 9;
@@ -2118,6 +2148,17 @@ function useHeavyAttack(player) {
   player.vx = 0;
   player.vy = 24;
   playSound("heavy");
+  updateHealthUI();
+}
+
+function useVampiric(player) {
+  if (player.id !== 1 || !gameStarted || gameOver || player.health <= 0 ||
+    player.vampiricTimer > 0 || player.vampiricCooldown > 0) return;
+  player.vampiricTimer = VAMPIRIC_DURATION;
+  player.vampiricCooldown = VAMPIRIC_COOLDOWN;
+  spawnImpact(player.x + PLAYER_WIDTH / 2, player.y + PLAYER_HEIGHT / 2, "#d94bff", 18);
+  playSound("heal");
+  message.textContent = "玩家 1 啟動吸血，4 秒內攻擊可恢復生命！";
   updateHealthUI();
 }
 
@@ -2225,7 +2266,7 @@ function executeUltimateSlash(player, target, index, total) {
     });
   }
 
-  target.health = Math.max(0, target.health - damage);
+  dealDamage(player, target, damage);
   target.hitFlash = 200;
   playSound("hit");
   target.vx = player.facing * (strongHit ? 12 : 7);
@@ -2431,6 +2472,7 @@ window.addEventListener("keydown", (event) => {
     if (key === player.controls.attack) attackPlayer(player);
     if (key === player.controls.skill) useSkill(player);
     if (key === player.controls.heavy) useHeavyAttack(player);
+    if (key === player.controls.vampiric) useVampiric(player);
     if (key === player.controls.heal) useHeal(player);
     if (key === player.controls.ultimate) useUltimate(player);
     if (key === player.controls.hook) useHook(player);
