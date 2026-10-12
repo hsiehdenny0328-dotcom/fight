@@ -330,6 +330,15 @@
       matchScore,
       matchOver,
       screenShakeTimer,
+      earthquake: {
+        phase: earthquake.phase,
+        timer: earthquake.timer,
+        centerX: earthquake.centerX,
+        gapWidth: earthquake.gapWidth,
+        eventId: earthquake.eventId,
+        nextIn: earthquake.nextIn,
+        gaps: earthquake.gaps,
+      },
       message:message.textContent,
     };
   }
@@ -358,6 +367,25 @@
           brokenPlatforms.add(index);
         }
       });
+    }
+    if (data.earthquake && typeof data.earthquake === 'object') {
+      const incomingEarthquake = data.earthquake;
+      if (['idle', 'shaking', 'split'].includes(incomingEarthquake.phase)) {
+        earthquake.phase = incomingEarthquake.phase;
+      }
+      ['timer', 'centerX', 'gapWidth', 'eventId', 'nextIn'].forEach(key => {
+        if (Number.isFinite(incomingEarthquake[key])) earthquake[key] = incomingEarthquake[key];
+      });
+      if (Array.isArray(incomingEarthquake.gaps)) {
+        earthquake.gaps = incomingEarthquake.gaps
+          .filter(gap => gap && Number.isFinite(gap.x) && Number.isFinite(gap.width))
+          .slice(-20)
+          .map(gap => ({
+            x: gap.x,
+            width: gap.width,
+            eventId: Number.isFinite(gap.eventId) ? gap.eventId : 0,
+          }));
+      }
     }
     if (mode === 'guest') {
       const entityPositions = [projectiles, hooks, decoys, meteors, craters, effects].map(entities =>

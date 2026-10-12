@@ -64,6 +64,15 @@ const ULTIMATE_STRIKE_INTERVAL = 300;
 const SCREEN_SHAKE_DURATION = 180;
 const SCREEN_SHAKE_INTENSITY = 9;
 const SCREEN_SHAKE_VIBRATION_MULTIPLIER = 1.5;
+const EARTHQUAKE_WARNING_DURATION = 1500;
+const EARTHQUAKE_FIRST_DELAY_MIN = 7000;
+const EARTHQUAKE_FIRST_DELAY_MAX = 12000;
+const EARTHQUAKE_NEXT_DELAY_MIN = 11000;
+const EARTHQUAKE_NEXT_DELAY_MAX = 19000;
+const EARTHQUAKE_GAP_WIDTH = 170;
+const EARTHQUAKE_MIN_GAP_DISTANCE = 220;
+const EARTHQUAKE_FALL_DAMAGE = 18;
+const EARTHQUAKE_LAUNCH_VELOCITY = -48;
 const effects = [];
 
 let audioContext = null;
@@ -224,6 +233,23 @@ let nextDecoyId = 0;
 let nextMeteorVolleyId = 0;
 let screenShakeTimer = 0;
 let cameraScale = 1;
+const earthquake = {
+  phase: "idle",
+  timer: 0,
+  centerX: 0,
+  gapWidth: EARTHQUAKE_GAP_WIDTH,
+  eventId: 0,
+  nextIn: 0,
+  gaps: [],
+};
+
+function clearEarthquake() {
+  earthquake.phase = "idle";
+  earthquake.timer = 0;
+  earthquake.centerX = 0;
+  earthquake.gapWidth = EARTHQUAKE_GAP_WIDTH;
+  earthquake.gaps = [];
+}
 
 const players = [
   {
@@ -253,6 +279,7 @@ const players = [
     vampiricCooldown: 0,
     ultimateCooldown: 0,
     ultimateState: null,
+    crackFallCooldown: 0,
     attackHit: new Set(),
     controls: { left: "a", right: "d", jump: "w", attack: "s", skill: "g", hook: "y", heavy: "f", vampiric: "e", ultimate: "u", defend: "q" },
   },
@@ -281,6 +308,7 @@ const players = [
     healCooldown: 0,
     decoyCooldown: 0,
     meteorCooldown: 0,
+    crackFallCooldown: 0,
     attackHit: new Set(),
     controls: { left: "arrowleft", right: "arrowright", jump: "arrowup", attack: "arrowdown", skill: ".", heal: "5", decoy: "/", meteor: "7", defend: "0" },
   },
@@ -346,6 +374,10 @@ function resetGame() {
   effects.length = 0;
   screenShakeTimer = 0;
   cameraScale = 1;
+  clearEarthquake();
+  earthquake.eventId = 0;
+  earthquake.nextIn = EARTHQUAKE_FIRST_DELAY_MIN +
+    Math.random() * (EARTHQUAKE_FIRST_DELAY_MAX - EARTHQUAKE_FIRST_DELAY_MIN);
   gameStarted = true;
   gameOver = false;
   roundTimeRemaining = ROUND_TIME_LIMIT;
@@ -443,6 +475,70 @@ function updateRoundTimer(deltaMs) {
   if (!gameStarted || gameOver || window.duel?.countdownText?.()) return;
   roundTimeRemaining = Math.max(0, roundTimeRemaining - deltaMs);
   updateRoundTimerUI();
+}
+
+function getEarthquakeGapAt(x) {
+  return earthquake.gaps.find((gap) =>
+    Math.abs(x - gap.x) < gap.width / 2
+  ) || null;
+}
+
+function triggerEarthquake() {
+  let centerX = 0;
+  let validPosition = false;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const candidate = 100 + Math.random() * (WORLD_WIDTH - 200);
+    const overlapsGap = earthquake.gaps.some((gap) =>
+      Math.abs(candidate - gap.x) < EARTHQUAKE_MIN_GAP_DISTANCE
+    );
+    if (!overlapsGap) {
+      centerX = candidate;
+      validPosition = true;
+      break;
+    }
+  }
+  if (!validPosition) return false;
+  earthquake.phase = "shaking";
+  earthquake.timer = EARTHQUAKE_WARNING_DURATION;
+  earthquake.centerX = centerX;
+  earthquake.gapWidth = EARTHQUAKE_GAP_WIDTH;
+  earthquake.eventId += 1;
+  screenShakeTimer = Math.max(screenShakeTimer, EARTHQUAKE_WARNING_DURATION);
+  triggerHitVibration();
+  playSound("heavy");
+  message.textContent = "山崩地裂！地面正在劇烈晃動！";
+  return true;
+}
+
+function updateEarthquake(deltaMs) {
+  if (!gameStarted || window.duel?.countdownText?.()) return;
+  if (gameOver) {
+    clearEarthquake();
+    return;
+  }
+  if (earthquake.phase === "idle") {
+    earthquake.nextIn -= deltaMs;
+    if (earthquake.nextIn <= 0 && !triggerEarthquake()) {
+      earthquake.nextIn = EARTHQUAKE_NEXT_DELAY_MIN;
+    }
+    return;
+  }
+  earthquake.timer -= deltaMs;
+  if (earthquake.phase === "shaking" && earthquake.timer <= 0) {
+    earthquake.phase = "idle";
+    earthquake.timer = 0;
+    earthquake.gaps.push({
+      x: earthquake.centerX,
+      width: earthquake.gapWidth,
+      eventId: earthquake.eventId,
+    });
+    earthquake.nextIn = EARTHQUAKE_NEXT_DELAY_MIN +
+      Math.random() * (EARTHQUAKE_NEXT_DELAY_MAX - EARTHQUAKE_NEXT_DELAY_MIN);
+    screenShakeTimer = Math.max(screenShakeTimer, SCREEN_SHAKE_DURATION * 2);
+    spawnImpact(earthquake.centerX, GROUND_Y, "#ffcf6b", 30);
+    playSound("hit");
+    message.textContent = `地板裂成兩半！目前共有 ${earthquake.gaps.length} 條永久裂縫！`;
+  }
 }
 
 window.duelTimer = {
@@ -588,6 +684,61 @@ function drawBackground(targetContext = ctx, targetCanvas = canvas, skyTop = 0) 
 
   ctx.fillStyle = "rgba(73, 51, 29, 0.45)";
   ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+  if (!gameOver) {
+    earthquake.gaps.forEach((gap) => {
+      if (gap.x >= canvas.width + gap.width || gap.x <= -gap.width) return;
+      const left = Math.max(-20, gap.x - gap.width / 2);
+      const right = Math.min(canvas.width + 20, gap.x + gap.width / 2);
+    const crackTop = GROUND_Y - 2;
+    const crackBottom = canvas.height + 10;
+    ctx.fillStyle = "#171019";
+    ctx.beginPath();
+    ctx.moveTo(left, crackTop);
+    ctx.lineTo(left + 18, crackTop + 20);
+    ctx.lineTo(left - 8, crackTop + 52);
+    ctx.lineTo(left + 16, crackBottom);
+    ctx.lineTo(right - 14, crackBottom);
+    ctx.lineTo(right + 8, crackTop + 56);
+    ctx.lineTo(right - 16, crackTop + 24);
+    ctx.lineTo(right, crackTop);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 117, 54, 0.7)";
+    ctx.beginPath();
+    ctx.moveTo(left + 18, crackTop);
+    ctx.lineTo(left + 30, crackTop + 30);
+    ctx.lineTo(left + 12, crackTop + 64);
+    ctx.lineTo(left + 28, crackBottom);
+    ctx.lineTo(left + 38, crackBottom);
+    ctx.lineTo(left + 28, crackTop + 62);
+    ctx.lineTo(left + 46, crackTop + 28);
+    ctx.lineTo(left + 38, crackTop);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#3d2630";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(left - 2, crackTop);
+    ctx.lineTo(left + 20, crackTop + 16);
+    ctx.lineTo(left + 4, crackTop + 42);
+    ctx.moveTo(right + 2, crackTop);
+    ctx.lineTo(right - 20, crackTop + 18);
+    ctx.lineTo(right - 5, crackTop + 44);
+    ctx.stroke();
+    });
+  }
+  if (earthquake.phase === "shaking" && earthquake.timer > 0) {
+    const crackX = earthquake.centerX;
+    ctx.strokeStyle = "rgba(255, 218, 132, 0.82)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(crackX - 26, GROUND_Y);
+    ctx.lineTo(crackX - 8, GROUND_Y + 18);
+    ctx.lineTo(crackX + 2, GROUND_Y - 4);
+    ctx.lineTo(crackX + 20, GROUND_Y + 24);
+    ctx.stroke();
+  }
 
   PLATFORMS.forEach((platform) => {
     const platformIndex = PLATFORMS.indexOf(platform);
@@ -1508,6 +1659,7 @@ function updatePlayers() {
     }
     player.defenseTimer = Math.max(0, player.defenseTimer - 16);
     player.defenseCooldown = Math.max(0, player.defenseCooldown - 16);
+    player.crackFallCooldown = Math.max(0, player.crackFallCooldown - 16);
     const platform = player.vy >= 0
       ? PLATFORMS.find((candidate) =>
         !brokenPlatforms.has(PLATFORMS.indexOf(candidate)) &&
@@ -1521,7 +1673,30 @@ function updatePlayers() {
       candidate.life > 0 &&
       Math.abs(player.x + PLAYER_WIDTH / 2 - candidate.x) < candidate.width / 2
     );
-    const landingY = platform ? platform.y : crater ? GROUND_Y + crater.depth : GROUND_Y;
+    const earthquakeGap = !platform
+      ? getEarthquakeGapAt(player.x + PLAYER_WIDTH / 2)
+      : null;
+    const inEarthquakeGap = Boolean(earthquakeGap);
+    const landingY = platform ? platform.y
+      : inEarthquakeGap ? Number.POSITIVE_INFINITY
+        : crater ? GROUND_Y + crater.depth : GROUND_Y;
+    if (inEarthquakeGap && player.vy > 0 && player.y + PLAYER_HEIGHT >= GROUND_Y + 52 &&
+      player.crackFallCooldown <= 0 && player.health > 0) {
+      player.crackFallCooldown = 520;
+      if (!isDefending(player)) {
+        player.health = Math.max(0, player.health - EARTHQUAKE_FALL_DAMAGE);
+        player.hitFlash = 280;
+        player.vy = EARTHQUAKE_LAUNCH_VELOCITY;
+        player.vx = 0;
+        player.onGround = false;
+        screenShakeTimer = SCREEN_SHAKE_DURATION;
+        triggerHitVibration();
+        spawnImpact(player.x + PLAYER_WIDTH / 2, GROUND_Y + 45, "#ff704d", 26);
+        playSound("hit");
+        message.textContent = `玩家 ${player.id} 掉入地裂，受到傷害並被震飛！`;
+        updateHealthUI();
+      }
+    }
     if (player.y + PLAYER_HEIGHT >= landingY) {
       if (player.heavyState && platform) {
         breakPlatform(platform);
@@ -1977,6 +2152,7 @@ function checkGameOver() {
   if (!gameStarted || gameOver) return;
   if (roundTimeRemaining <= 0) {
     gameOver = true;
+    clearEarthquake();
     window.duel?.stopAudio();
     message.textContent = `時間到，本局平手，比分維持 ${matchScore[0]} : ${matchScore[1]}。請重賽。`;
     window.duel?.refreshUi();
@@ -1985,6 +2161,7 @@ function checkGameOver() {
   const alive = players.filter((player) => player.health > 0);
   if (alive.length <= 1) {
     gameOver = true;
+    clearEarthquake();
     window.duel?.stopAudio();
     if (alive.length === 1) {
       playSound("win");
@@ -2066,6 +2243,7 @@ function drawHealthBars() {
 }
 
 function draw() {
+  if (gameOver && earthquake.phase !== "idle") clearEarthquake();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const playerOneCenter = players[0].x + PLAYER_WIDTH / 2;
   const playerTwoCenter = players[1].x + PLAYER_WIDTH / 2;
@@ -2090,6 +2268,13 @@ function draw() {
   if (screenShakeTimer > 0) {
     const intensity = SCREEN_SHAKE_INTENSITY * SCREEN_SHAKE_VIBRATION_MULTIPLIER * (screenShakeTimer / SCREEN_SHAKE_DURATION);
     ctx.translate((Math.random() * 2 - 1) * intensity, (Math.random() * 2 - 1) * intensity);
+  }
+  if (earthquake.phase === "shaking" && earthquake.timer > 0) {
+    const intensity = 5 + Math.sin(performance.now() * 0.08) * 3;
+    ctx.translate(
+      Math.sin(performance.now() * 0.12) * intensity,
+      Math.cos(performance.now() * 0.15) * intensity * 0.7,
+    );
   }
   ctx.translate(-cameraLeft * cameraScale, GROUND_Y * (1 - cameraScale));
   ctx.scale(cameraScale, cameraScale);
@@ -2129,6 +2314,7 @@ function gameLoop(now) {
     if (gameStarted && !gameOver && (!window.duel || window.duel.canSimulate())) {
     window.duel?.updateBot();
     updateRoundTimer(1000 / 60);
+    updateEarthquake(1000 / 60);
     updatePlayers();
     processAttacks();
     updateProjectiles();
