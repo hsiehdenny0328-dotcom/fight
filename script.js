@@ -13,6 +13,7 @@ const WORLD_WIDTH = 1800;
 const PLATFORMS = [
   { x: 300, y: 330, width: 150, type: "tree" },
   { x: 850, y: 290, width: 180, type: "house" },
+  { x: 1160, y: 220, width: 160, type: "tree" },
   { x: 1490, y: 340, width: 170, type: "rock" },
 ];
 const brokenPlatforms = new Set();
@@ -37,7 +38,7 @@ const DEFENSE_COOLDOWN = 4000;
 const HEAL_AMOUNT = 18;
 const HEAL_COOLDOWN = 8000;
 const HOOK_SPEED = 14;
-const HOOK_RANGE = 560;
+const HOOK_RANGE = 720;
 const HOOK_PULL_SPEED = 11;
 const DECOY_LIFETIME = 4800;
 const ULTIMATE_COOLDOWN = 10000;
@@ -2768,6 +2769,16 @@ function useHeal(player) {
 }
 
 function useHook(player) {
+  if (player.id === 1) {
+    const activeHookIndex = hooks.findIndex((hook) =>
+      hook.ownerId === player.id && hook.targetId !== null);
+    if (activeHookIndex >= 0) {
+      hooks.splice(activeHookIndex, 1);
+      message.textContent = "玩家 1 取消勾索牽引。";
+      updateHealthUI();
+      return;
+    }
+  }
   if (player.hookCooldown > 0 || player.health <= 0 || gameOver) return;
   const originX = player.x + PLAYER_WIDTH / 2 + player.facing * 25;
   const originY = player.y + 34;
