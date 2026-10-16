@@ -97,6 +97,14 @@
       $('fullscreenToggle').title = error instanceof Error ? error.message : '無法切換全螢幕';
     }
   }
+  async function exitFullscreen() {
+    if (!document.fullscreenElement) return;
+    try {
+      await document.exitFullscreen();
+    } catch (error) {
+      $('fullscreenToggle').title = error instanceof Error ? error.message : '無法退出全螢幕';
+    }
+  }
   function updateFullscreenButton() {
     const button = $('fullscreenToggle');
     const supported = Boolean(document.fullscreenEnabled &&
@@ -293,7 +301,8 @@
     setNetworkStatus('idle', '單人模式', '在同一個裝置上進行對戰。');
     ui();
   }
-  function returnToMenu() {
+  async function returnToMenu() {
+    await exitFullscreen();
     if (mode !== 'local') {
       stop();
       $('onlinePanel').hidden = true;
