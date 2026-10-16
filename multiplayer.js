@@ -53,6 +53,7 @@
     message.textContent = '機器人決鬥開始！擊倒對手獲勝。';
     window.duel?.startAudio();
     showGameScreen();
+    enterFullscreen();
     setNetworkStatus('connected', '機器人決鬥', `${botDifficultySettings[botDifficulty].label}難度 · 倒數後開始`);
     ui();
   }
@@ -68,6 +69,33 @@
   function showGameScreen() {
     $('menuScreen').hidden = true;
     $('gameScreen').hidden = false;
+  }
+  async function enterFullscreen() {
+    const gameScreen = $('gameScreen');
+    if (!gameScreen.requestFullscreen) return;
+    try {
+      await gameScreen.requestFullscreen();
+    } catch (error) {
+      const button = $('fullscreenToggle');
+      button.title = error instanceof Error ? error.message : '瀏覽器拒絕全螢幕請求';
+    }
+  }
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await enterFullscreen();
+      }
+    } catch (error) {
+      $('fullscreenToggle').title = error instanceof Error ? error.message : '無法切換全螢幕';
+    }
+  }
+  function updateFullscreenButton() {
+    const button = $('fullscreenToggle');
+    const supported = Boolean(document.fullscreenEnabled && $('gameScreen').requestFullscreen);
+    button.hidden = !supported;
+    button.textContent = document.fullscreenElement ? '退出全螢幕' : '進入全螢幕';
   }
   function localCharacterId() {
     return mode === 'host' ? hostCharacterId : mode === 'guest'
@@ -253,6 +281,7 @@
     startNextGame();
     window.duel?.startAudio();
     showGameScreen();
+    enterFullscreen();
     setNetworkStatus('idle', '單人模式', '在同一個裝置上進行對戰。');
     ui();
   }
@@ -570,6 +599,7 @@
       startNextGame();
       countdownEndsAt = performance.now() + 3000;
       fightTextUntil = 0;
+      enterFullscreen();
       window.duel?.startAudio();
       lastCountdownSend = 0;
       send({type:'countdown', countdownMs:3000, fightTextMs:0});
@@ -609,6 +639,8 @@
     $('botPanel').hidden = true;
   };
   $('returnToMenu').onclick = returnToMenu;
+  $('fullscreenToggle').onclick = toggleFullscreen;
+  document.addEventListener('fullscreenchange', updateFullscreenButton);
   document.querySelectorAll('[data-character]').forEach(button => {
     button.addEventListener('click', () => chooseCharacter(Number(button.dataset.character)));
   });
@@ -744,4 +776,5 @@
     }
   };
   ui();
+  updateFullscreenButton();
 })();
