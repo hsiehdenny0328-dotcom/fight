@@ -384,6 +384,7 @@ function resetGame() {
   message.textContent = "雙人決鬥開始！擊倒對手獲勝。";
   updateHealthUI();
   updateRoundTimerUI();
+  updateMatchResultUI();
 }
 
 function startNextGame() {
@@ -392,6 +393,117 @@ function startNextGame() {
     matchOver = false;
   }
   resetGame();
+}
+
+function drawMatchResultPortrait(characterId) {
+  const portrait = document.getElementById("matchResultCharacterPortrait");
+  const portraitContext = portrait?.getContext("2d");
+  if (!portraitContext) return;
+  const isRed = characterId === 1;
+  const glow = isRed ? "#ff2738" : "#00eaff";
+  const body = isRed ? "#090a0d" : "#08131c";
+  const edge = isRed ? "#252832" : "#47f5ff";
+  const centerX = portrait.width / 2;
+  const groundY = 136;
+  portraitContext.clearRect(0, 0, portrait.width, portrait.height);
+  portraitContext.fillStyle = "rgba(0, 0, 0, 0.24)";
+  portraitContext.beginPath();
+  portraitContext.ellipse(centerX, groundY + 4, 28, 7, 0, 0, Math.PI * 2);
+  portraitContext.fill();
+  portraitContext.save();
+  portraitContext.translate(centerX, 24);
+  portraitContext.lineCap = "round";
+  portraitContext.lineJoin = "round";
+  portraitContext.shadowColor = glow;
+  portraitContext.shadowBlur = isRed ? 8 : 18;
+  const limb = (points, color, width) => {
+    portraitContext.beginPath();
+    portraitContext.moveTo(points[0], points[1]);
+    for (let index = 2; index < points.length; index += 2) {
+      portraitContext.lineTo(points[index], points[index + 1]);
+    }
+    portraitContext.strokeStyle = color;
+    portraitContext.lineWidth = width;
+    portraitContext.stroke();
+  };
+  limb([-1, 32, 1, 67], edge, 18);
+  limb([-1, 32, 1, 67], body, 11);
+  limb([-2, 38, -18, 57, -22, 70], edge, 12);
+  limb([-2, 38, -18, 57, -22, 70], body, 7);
+  limb([2, 38, 18, 55, 23, 68], edge, 12);
+  limb([2, 38, 18, 55, 23, 68], body, 7);
+  limb([1, 65, -16, 94, -19, 115], edge, 16);
+  limb([1, 65, -16, 94, -19, 115], body, 9);
+  limb([1, 65, 16, 94, 19, 115], edge, 16);
+  limb([1, 65, 16, 94, 19, 115], body, 9);
+  portraitContext.fillStyle = glow;
+  portraitContext.shadowBlur = isRed ? 15 : 25;
+  portraitContext.beginPath();
+  portraitContext.ellipse(-18, 116, 11, 6, -0.2, 0, Math.PI * 2);
+  portraitContext.ellipse(20, 116, 11, 6, 0.2, 0, Math.PI * 2);
+  portraitContext.fill();
+  portraitContext.shadowBlur = isRed ? 6 : 18;
+  portraitContext.fillStyle = body;
+  portraitContext.strokeStyle = edge;
+  portraitContext.lineWidth = isRed ? 3 : 4;
+  portraitContext.beginPath();
+  portraitContext.arc(0, 16, 19, 0, Math.PI * 2);
+  portraitContext.fill();
+  portraitContext.stroke();
+  portraitContext.fillStyle = isRed ? "#fff" : "#eaffff";
+  if (isRed) {
+    portraitContext.beginPath();
+    portraitContext.ellipse(7, 15, 6, 3, -0.25, 0, Math.PI * 2);
+    portraitContext.fill();
+    portraitContext.fillStyle = "#ff2638";
+    portraitContext.beginPath();
+    portraitContext.ellipse(-7, 15, 5, 3, 0.25, 0, Math.PI * 2);
+    portraitContext.fill();
+  } else {
+    portraitContext.beginPath();
+    portraitContext.ellipse(-7, 18, 5, 3, -0.35, 0, Math.PI * 2);
+    portraitContext.ellipse(7, 18, 5, 3, 0.35, 0, Math.PI * 2);
+    portraitContext.fill();
+  }
+  limb([-3, 39, -18, 56, -25, 69], edge, 10);
+  limb([-3, 39, -18, 56, -25, 69], body, 5);
+  limb([3, 39, 14, 53, 21, 59], edge, 10);
+  limb([3, 39, 14, 53, 21, 59], body, 5);
+  portraitContext.shadowColor = glow;
+  portraitContext.shadowBlur = isRed ? 17 : 25;
+  portraitContext.strokeStyle = isRed ? "#fff4f4" : "#d9ffff";
+  portraitContext.lineWidth = 6;
+  portraitContext.beginPath();
+  if (isRed) {
+    portraitContext.moveTo(15, 57);
+    portraitContext.lineTo(57, 48);
+  } else {
+    portraitContext.moveTo(17, 56);
+    portraitContext.lineTo(54, 76);
+  }
+  portraitContext.stroke();
+  portraitContext.strokeStyle = glow;
+  portraitContext.lineWidth = 2;
+  portraitContext.stroke();
+  portraitContext.restore();
+}
+
+function updateMatchResultUI() {
+  const result = document.getElementById("matchResult");
+  if (!result) return;
+  const winnerId = matchScore.findIndex((score) => score >= 2) + 1;
+  const visible = matchOver && winnerId > 0;
+  result.hidden = !visible;
+  if (!visible) return;
+  const title = document.getElementById("matchResultTitle");
+  const character = document.getElementById("matchResultCharacter");
+  const characterName = document.getElementById("matchResultCharacterName");
+  const score = document.getElementById("matchResultScore");
+  if (title) title.textContent = `玩家 ${winnerId} 勝利！`;
+  if (character) character.className = `match-result-character character-${winnerId}`;
+  drawMatchResultPortrait(winnerId);
+  if (characterName) characterName.textContent = winnerId === 1 ? "瞬步劍士" : "念力鬥士";
+  if (score) score.textContent = `最終比分 ${matchScore[0]} : ${matchScore[1]}`;
 }
 
 function updateHealthUI() {
@@ -2169,6 +2281,7 @@ function checkGameOver() {
       if (matchScore[alive[0].id - 1] >= 2) {
         matchOver = true;
         message.textContent = `玩家 ${alive[0].id} 贏得三戰兩勝！最終比分 ${matchScore[0]} : ${matchScore[1]}。請開始新系列賽。`;
+        updateMatchResultUI();
       } else {
         message.textContent = `玩家 ${alive[0].id} 贏得本局！比分 ${matchScore[0]} : ${matchScore[1]}。請開始下一局。`;
       }
@@ -2743,6 +2856,12 @@ document.getElementById("volumeUp")?.addEventListener("click", () => {
   setAudioVolume(audioVolume + 0.1);
 });
 document.getElementById("volumeMute")?.addEventListener("click", toggleAudioMute);
+document.getElementById("matchResultRestart")?.addEventListener("click", () => {
+  document.getElementById("startGame")?.click();
+});
+document.getElementById("matchResultMenu")?.addEventListener("click", () => {
+  document.getElementById("returnToMenu")?.click();
+});
 updateVolumeUI();
 
 resetGame();
@@ -2750,5 +2869,6 @@ gameStarted = false;
 roundTimeRemaining = ROUND_TIME_LIMIT;
 message.textContent = "按空白鍵開始遊戲";
 updateRoundTimerUI();
+updateMatchResultUI();
 drawMenuBackground();
 requestAnimationFrame(gameLoop);

@@ -181,8 +181,9 @@
     const selectionReady = mode === 'local' || (hostCharacterId !== null && guestCharacterId !== null &&
       hostCharacterId !== guestCharacterId);
     $('startGame').disabled = mode !== 'local' && mode !== 'bot' && (!connected || mode === 'guest' || !selectionReady);
-    $('startGame').hidden = mode === 'guest' || !gameOver;
+    $('startGame').hidden = mode === 'guest' || !gameOver || matchOver;
     $('startGame').textContent = gameOver ? '重新開始' : '開始遊戲';
+    $('matchResultRestart').disabled = mode === 'guest';
     $('characterSelect').hidden = mode === 'local' || mode === 'bot' || !connected || onlineMatchStarted;
     $('touchControls').hidden = mode !== 'local' && mode !== 'bot' && !gameStarted;
     const turn = selectionTurn();
@@ -425,6 +426,7 @@
       matchScore = data.matchScore;
     }
     matchOver = !!data.matchOver;
+    updateMatchResultUI();
     screenShakeTimer = Number(data.screenShakeTimer) || 0;
     message.textContent = String(data.message || '');
     updateHealthUI();

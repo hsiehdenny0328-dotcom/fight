@@ -93,6 +93,7 @@
       <header class="game-header">
         <button id="returnToMenu" class="text-button">返回主選單</button>
         <p id="gameNetworkStatus" role="status" aria-live="polite">單人模式</p>
+        <div id="roundTimer" class="round-timer" aria-live="polite">剩餘時間：90 秒</div>
         <button id="startGame">重新開始</button>
       </header>
       <section id="characterSelect" class="character-select" aria-label="多人連線角色選擇" hidden>
@@ -110,6 +111,22 @@
         </div>
         <p id="characterSelectStatus" role="status" aria-live="polite">等待連線後隨機決定選角順序</p>
       </section>
+      <section id="matchResult" class="match-result" aria-labelledby="matchResultTitle" hidden>
+        <p class="match-result-kicker">三戰兩勝結算</p>
+        <h2 id="matchResultTitle">玩家 1 勝利！</h2>
+        <div id="matchResultCharacter" class="match-result-character character-one">
+          <canvas id="matchResultCharacterPortrait" class="match-result-character-portrait" width="120" height="150" aria-label="勝利角色人物形象"></canvas>
+          <div>
+            <p class="match-result-character-label">勝利角色</p>
+            <p id="matchResultCharacterName" class="match-result-character-name">瞬步劍士</p>
+          </div>
+        </div>
+        <p id="matchResultScore" class="match-result-score">最終比分 2 : 0</p>
+        <div class="match-result-actions">
+          <button id="matchResultRestart" type="button">開始新系列賽</button>
+          <button id="matchResultMenu" type="button" class="text-button">返回主選單</button>
+        </div>
+      </section>
       <div class="game-stage">
         <canvas id="gameCanvas" width="1100" height="520"></canvas>
         <div id="countdownOverlay" class="countdown-overlay" role="status" aria-live="assertive" hidden></div>
@@ -121,7 +138,6 @@
         </div>
         <div class="status">
           <div id="message">按空白鍵開始遊戲</div>
-          <div id="roundTimer" class="round-timer" aria-live="polite">剩餘時間：90 秒</div>
           <div class="health-bars">
             <div><span class="player-label player1">玩家 1</span> <span id="health1">200</span> / 200</div>
             <div>
