@@ -2312,32 +2312,36 @@ function drawHealthBars() {
     const percentage = `${Math.round((player.health / MAX_HEALTH) * 100)}%`;
     const textX = index === 0 ? left + barWidth + 8 : left - 8;
     ctx.fillText(percentage, textX, top + barHeight / 2);
-    if (player.id === 1) {
-      ctx.fillStyle = "#fff";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(
-        player.ultimateCooldown > 0
-          ? `U 大招 ${(player.ultimateCooldown / 1000).toFixed(1)} 秒`
-          : "U 大招 就緒",
-        left,
-        top + barHeight + 14,
-      );
-    } else {
-      const meteorKey = window.duel
-        ? window.duel.controlKey(player, "meteor")
-        : player.controls.meteor;
-      ctx.fillStyle = "#fff";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(
-        player.meteorCooldown > 0
-          ? `${meteorKey} 隕石 ${(player.meteorCooldown / 1000).toFixed(1)} 秒`
-          : `${meteorKey} 隕石 就緒`,
-        left + barWidth,
-        top + barHeight + 14,
-      );
-    }
+    const keyFor = (action) => {
+      const localAction = action === "extra" && player.id === 2 ? "decoy" : action;
+      const key = window.duel?.controlKey(player, action);
+      return key || player.controls[localAction];
+    };
+    const seconds = (milliseconds) => `${(milliseconds / 1000).toFixed(1)} 秒`;
+    const cooldowns = player.id === 1
+      ? [
+        player.skillRechargeTimer > 0
+          ? `G 瞬移 ${player.skillCharges}/${MAX_SKILL_CHARGES} · ${seconds(player.skillRechargeTimer)}`
+          : `G 瞬移 ${player.skillCharges}/${MAX_SKILL_CHARGES}`,
+        player.defenseCooldown > 0 ? `Q 防禦 ${seconds(player.defenseCooldown)}` : "Q 防禦 就緒",
+        player.hookCooldown > 0 ? `${keyFor("hook").toUpperCase()} 勾索 ${seconds(player.hookCooldown)}` : `${keyFor("hook").toUpperCase()} 勾索 就緒`,
+        player.heavyCooldown > 0 ? `${keyFor("heavy").toUpperCase()} 重擊 ${seconds(player.heavyCooldown)}` : `${keyFor("heavy").toUpperCase()} 重擊 就緒`,
+        player.vampiricTimer > 0 ? `E 吸血 ${seconds(player.vampiricTimer)}` : player.vampiricCooldown > 0 ? `E 吸血冷卻 ${seconds(player.vampiricCooldown)}` : "E 吸血 就緒",
+        player.ultimateCooldown > 0 ? `${keyFor("ultimate").toUpperCase()} 大招 ${seconds(player.ultimateCooldown)}` : `${keyFor("ultimate").toUpperCase()} 大招 就緒`,
+      ]
+      : [
+        player.defenseCooldown > 0 ? `${keyFor("defend").toUpperCase()} 防禦 ${seconds(player.defenseCooldown)}` : `${keyFor("defend").toUpperCase()} 防禦 就緒`,
+        player.skillCooldown > 0 ? `${keyFor("skill").toUpperCase()} 波動拳 ${seconds(player.skillCooldown)}` : `${keyFor("skill").toUpperCase()} 波動拳 就緒`,
+        player.healCooldown > 0 ? `${keyFor("heal").toUpperCase()} 治療 ${seconds(player.healCooldown)}` : `${keyFor("heal").toUpperCase()} 治療 就緒`,
+        player.decoyCooldown > 0 ? `${keyFor("extra").toUpperCase()} 隱分身 ${seconds(player.decoyCooldown)}` : `${keyFor("extra").toUpperCase()} 隱分身 就緒`,
+        player.meteorCooldown > 0 ? `${keyFor("meteor").toUpperCase()} 隕石 ${seconds(player.meteorCooldown)}` : `${keyFor("meteor").toUpperCase()} 隕石 就緒`,
+      ];
+    ctx.fillStyle = "#fff";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = index === 0 ? "left" : "right";
+    cooldowns.forEach((cooldown, cooldownIndex) => {
+      ctx.fillText(cooldown, index === 0 ? left : left + barWidth, top + barHeight + 14 + cooldownIndex * 14);
+    });
   });
   const centerX = canvas.width / 2;
   const scoreTop = 10;

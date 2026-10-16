@@ -72,12 +72,18 @@
   }
   async function enterFullscreen() {
     const gameScreen = $('gameScreen');
-    if (!gameScreen.requestFullscreen) return;
+    const fullscreenTarget = gameScreen.requestFullscreen
+      ? gameScreen
+      : document.documentElement;
+    if (!fullscreenTarget.requestFullscreen) return;
     try {
-      await gameScreen.requestFullscreen();
+      await fullscreenTarget.requestFullscreen();
+      $('fullscreenToggle').title = '';
     } catch (error) {
       const button = $('fullscreenToggle');
-      button.title = error instanceof Error ? error.message : '瀏覽器拒絕全螢幕請求';
+      const detail = error instanceof Error ? error.message : '瀏覽器拒絕全螢幕請求';
+      button.textContent = '全螢幕失敗，請重試';
+      button.title = detail;
     }
   }
   async function toggleFullscreen() {
@@ -93,9 +99,11 @@
   }
   function updateFullscreenButton() {
     const button = $('fullscreenToggle');
-    const supported = Boolean(document.fullscreenEnabled && $('gameScreen').requestFullscreen);
+    const supported = Boolean(document.fullscreenEnabled &&
+      ($('gameScreen').requestFullscreen || document.documentElement.requestFullscreen));
     button.hidden = !supported;
     button.textContent = document.fullscreenElement ? '退出全螢幕' : '進入全螢幕';
+    if (!document.fullscreenElement) button.title = '';
   }
   function localCharacterId() {
     return mode === 'host' ? hostCharacterId : mode === 'guest'
